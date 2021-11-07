@@ -71,7 +71,7 @@ impl<'a> ContextDecoder<'a> {
             return Err("failed to parse propagation context: it must have 8 properties.");
         }
 
-        let do_sample = pieces[0] == "1";
+        let do_sample = self.try_parse_sample_status(pieces[0])?;
         let parent_trace_id = self.b64_encoded_into_string(pieces[1])?;
         let parent_trace_segment_id = self.b64_encoded_into_string(pieces[2])?;
         let parent_span_id: u32 = self.try_parse_parent_span_id(pieces[3])?;
@@ -102,6 +102,16 @@ impl<'a> ContextDecoder<'a> {
         }
     }
 
+    fn try_parse_sample_status(&self, status: &str) -> Result<bool, &str> {
+        if status == "0" {
+            Ok(false)
+        } else if status == "1" {
+            Ok(true)
+        } else {
+            Err("failed to parse sample status.")
+        }
+    }
+
     fn b64_encoded_into_string(&self, enc: &str) -> Result<String, &str> {
         if let Ok(result) = decode(enc) {
             if let Ok(decoded_str) = String::from_utf8(result) {
@@ -127,4 +137,31 @@ fn basic() {
     assert_eq!(res.parent_service_instance, "instance");
     assert_eq!(res.destination_endpoint, "/api/v1/health");
     assert_eq!(res.destination_address, "example.com:8080");
+}
+
+#[test]
+fn less_field() {
+    let data = "1-MQ==-NQ==-3-bWVzaA==-aW5zdGFuY2U=-L2FwaS92MS9oZWFsdGg=";
+    let decoder = ContextDecoder::new(data);
+    let res = decoder.decode();
+
+    assert_eq!(res.is_err(), true);
+}
+
+#[test]
+fn more_field() {
+    let data = "1-MQ==-NQ==-3-bWVzaA==-aW5zdGFuY2U=-L2FwaS92MS9oZWFsdGg=-ZXhhbXBsZS5jb206ODA4MA==-hogehoge";
+    let decoder = ContextDecoder::new(data);
+    let res = decoder.decode();
+
+    assert_eq!(res.is_err(), true);
+}
+
+#[test]
+fn invalid_sample() {
+    let data = "3-MQ==-NQ==-3-bWVzaA==-aW5zdGFuY2U=-L2FwaS92MS9oZWFsdGg=-ZXhhbXBsZS5jb206ODA4MA==";
+    let decoder = ContextDecoder::new(data);
+    let res = decoder.decode();
+
+    assert_eq!(res.is_err(), true);
 }
