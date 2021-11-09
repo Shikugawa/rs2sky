@@ -10,38 +10,43 @@ use skywalking::v3::SegmentObject;
 use tokio::sync::mpsc::channel;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tonic::transport::Channel;
-use tonic::Request;
 
 pub struct Reporter {
     client: TraceSegmentReportServiceClient<Channel>,
-    receiver: Receiver<SegmentObject>,
     sender: Sender<SegmentObject>,
 }
 
 impl Reporter {
-    async fn connect(host: &'static str, port: u16) -> Result<Self, Box<dyn std::error::Error>> {
-        let client = TraceSegmentReportServiceClient::connect(host).await?;
-        let (tx, mut rx) = channel(1024);
+    async fn connect(
+        host: &'static str,
+        port: u16,
+    ) -> Result<(Self, Receiver<SegmentObject>), Box<dyn std::error::Error>> {
+        let client =
+            TraceSegmentReportServiceClient::connect(format!("{}:{:?}", host, port)).await?;
+        let (tx, rx) = channel(1024);
 
-        Ok(Reporter {
-            client: client,
-            receiver: rx,
-            sender: tx,
-        })
+        Ok((
+            Reporter {
+                client: client,
+                sender: tx,
+            },
+            rx,
+        ))
     }
 
     async fn send_message(&mut self, message: SegmentObject) {
         self.sender.send(message);
     }
 
-    async fn flush(&mut self) -> Result<(), tonic::Status> {
-        let (tx, mut rx) = channel(10);
+    async fn flush(
+        &mut self,
+        rx: &'static mut Receiver<SegmentObject>,
+    ) -> Result<(), tonic::Status> {
         let s = stream! {
           while let Some(msg) = rx.recv().await {
             yield msg;
           }
         };
-
         match self.client.collect(s).await {
             Ok(_) => Ok(()),
             Err(e) => Err(e),
