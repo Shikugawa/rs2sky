@@ -61,12 +61,44 @@ impl Span {
     }
 }
 
+struct SpanSet {
+    spans: Vec<Span>,
+}
+
+impl SpanSet {
+    fn new() -> Self {
+        SpanSet { spans: Vec::new() }
+    }
+
+    fn convert_span_objects(&self) -> Vec<skywalking::v3::SpanObject> {
+        let mut objects = Vec::<skywalking::v3::SpanObject>::new();
+
+        for span in self.spans.iter() {
+            objects.push(span.span_internal.clone());
+        }
+
+        objects
+    }
+
+    fn push(&mut self, span: Span) {
+        self.spans.push(span);
+    }
+
+    fn len(&self) -> usize {
+        self.spans.len()
+    }
+
+    fn last_span_mut(&mut self) -> &mut Span {
+        self.spans.last_mut().unwrap()
+    }
+}
+
 pub struct TracingContext {
     trace_id: u128,
     trace_segment_id: u128,
     service: &'static str,
     service_instance: &'static str,
-    spans: Vec<Span>,
+    spans: SpanSet,
 }
 
 impl TracingContext {
@@ -81,7 +113,7 @@ impl TracingContext {
             trace_segment_id,
             service: service_name,
             service_instance: instance_name,
-            spans: Vec::<Span>::new(),
+            spans: SpanSet::new(),
         }
     }
 
@@ -109,7 +141,7 @@ impl TracingContext {
             false,
         ));
 
-        Ok(self.spans.last_mut().unwrap())
+        Ok(self.spans.last_span_mut())
     }
 
     // Create a new exit span, which will be created when tracing context will generate
@@ -126,7 +158,18 @@ impl TracingContext {
             false,
         ));
 
-        self.spans.last_mut().unwrap()
+        self.spans.last_span_mut()
+    }
+
+    pub fn convert_segment_object(&self) -> skywalking::v3::SegmentObject {
+        skywalking::v3::SegmentObject {
+            trace_id: self.trace_id.to_string(),
+            trace_segment_id: self.trace_segment_id.to_string(),
+            spans: self.spans.convert_span_objects(),
+            service: String::from(self.service),
+            service_instance: String::from(self.service_instance),
+            is_size_limited: false,
+        }
     }
 }
 
@@ -173,7 +216,7 @@ fn create_span() {
         span1.close();
     }
 
-    assert_ne!(context.spans.last().unwrap().span_internal.end_time, 0);
+    assert_ne!(context.spans.last_span_mut().span_internal.end_time, 0);
     assert_eq!(context.spans.len(), 1);
 
     {
@@ -208,6 +251,6 @@ fn create_span() {
         span3.close();
     }
 
-    assert_ne!(context.spans.last().unwrap().span_internal.end_time, 0);
+    assert_ne!(context.spans.last_span_mut().span_internal.end_time, 0);
     assert_eq!(context.spans.len(), 2);
 }
