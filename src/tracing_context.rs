@@ -4,7 +4,7 @@ pub mod skywalking {
     }
 }
 
-use crate::propagation::PropagationContext;
+use crate::propagation::{ContextDecoder, PropagationContext};
 use prost::Message;
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
@@ -270,6 +270,21 @@ fn create_span() {
     assert_eq!(segment.trace_segment_id.len() != 0, true);
     assert_eq!(segment.spans.len() == 2, true);
     assert_eq!(segment.service, "service");
+    assert_eq!(segment.service_instance, "instance");
+    assert_eq!(segment.is_size_limited, false);
+}
+
+#[test]
+fn create_span_from_context() {
+    let data = "1-MQ==-NQ==-3-bWVzaA==-aW5zdGFuY2U=-L2FwaS92MS9oZWFsdGg=-ZXhhbXBsZS5jb206ODA4MA==";
+    let decoder = ContextDecoder::new(data);
+    let prop = decoder.decode().unwrap();
+    let context = TracingContext::from_parent_span(prop);
+
+    let segment = context.convert_segment_object();
+    assert_eq!(segment.trace_id.len() != 0, true);
+    assert_eq!(segment.trace_segment_id.len() != 0, true);
+    assert_eq!(segment.service, "mesh");
     assert_eq!(segment.service_instance, "instance");
     assert_eq!(segment.is_size_limited, false);
 }
