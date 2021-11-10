@@ -4,28 +4,28 @@ pub struct PropagationContext {
     /// It defines whether next span should be trace or not.
     /// In SkyWalking, If `do_sample == true`, the span should be reported to
     /// OAP server and can be analyzed.
-    do_sample: bool,
+    pub do_sample: bool,
 
     /// It defines trace ID that previous span has. It expresses unique value of entire trace.
-    parent_trace_id: String,
+    pub parent_trace_id: String,
 
     /// It defines segment ID that previos span has. It expresses unique value of entire trace.
-    parent_trace_segment_id: String,
+    pub parent_trace_segment_id: String,
 
     /// It defines parent span's span ID.
-    parent_span_id: u32,
+    pub parent_span_id: u32,
 
     /// Service name of service parent belongs.
-    parent_service: String,
+    pub parent_service: String,
 
     /// Instance name of service parent belongs.
-    parent_service_instance: String,
+    pub parent_service_instance: String,
 
     /// An endpoint name that parent requested to.
-    destination_endpoint: String,
+    pub destination_endpoint: String,
 
     /// An address that parent requested to. It can be authority or network address.
-    destination_address: String,
+    pub destination_address: String,
 }
 
 impl PropagationContext {

@@ -4,6 +4,7 @@ pub mod skywalking {
     }
 }
 
+use crate::propagation::PropagationContext;
 use prost::Message;
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
@@ -26,7 +27,7 @@ impl Span {
             .unwrap()
             .as_secs();
 
-        let mut span_internal = skywalking::v3::SpanObject {
+        let span_internal = skywalking::v3::SpanObject {
             span_id: parent_span_id + 1,
             parent_span_id: parent_span_id,
             start_time: current_time as i64,
@@ -96,8 +97,8 @@ impl SpanSet {
 pub struct TracingContext {
     trace_id: u128,
     trace_segment_id: u128,
-    service: &'static str,
-    service_instance: &'static str,
+    service: String,
+    service_instance: String,
     spans: SpanSet,
 }
 
@@ -111,21 +112,29 @@ impl TracingContext {
         TracingContext {
             trace_id,
             trace_segment_id,
-            service: service_name,
-            service_instance: instance_name,
+            service: String::from(service_name),
+            service_instance: String::from(instance_name),
             spans: SpanSet::new(),
         }
     }
 
     /// Generate a trace context using the propagated context.
     /// It is generally used when tracing is to be performed continuously.
-    pub fn from_parent_span() -> Self {
-        unimplemented!()
+    pub fn from_parent_span(context: PropagationContext) -> Self {
+        let trace_segment_id = Uuid::new_v4().as_u128();
+
+        TracingContext {
+            trace_id: context.parent_trace_id.parse::<u128>().unwrap(),
+            trace_segment_id,
+            service: context.parent_service,
+            service_instance: context.parent_service_instance,
+            spans: SpanSet::new(),
+        }
     }
 
-    // Create a new entry span, which is an initiator of collection of spans.
-    // This should be called by invocation of the function which is triggered by
-    // external service.
+    /// Create a new entry span, which is an initiator of collection of spans.
+    /// This should be called by invocation of the function which is triggered by
+    /// external service.
     pub fn create_entry_span(&mut self, operation_name: String) -> Result<&mut Span, &str> {
         if self.spans.len() > 0 {
             return Err("failed to create entry span: the entry span has exist already");
@@ -144,9 +153,9 @@ impl TracingContext {
         Ok(self.spans.last_span_mut())
     }
 
-    // Create a new exit span, which will be created when tracing context will generate
-    // new span for function invocation.
-    // Currently, this SDK supports RPC call. So we must set `remote_peer`.
+    /// Create a new exit span, which will be created when tracing context will generate
+    /// new span for function invocation.
+    /// Currently, this SDK supports RPC call. So we must set `remote_peer`.
     pub fn create_exit_span(&mut self, operation_name: String, remote_peer: String) -> &mut Span {
         let parent_span_id = self.spans.len() - 1;
         self.spans.push(Span::new(
@@ -161,13 +170,15 @@ impl TracingContext {
         self.spans.last_span_mut()
     }
 
+    /// It converts tracing context into segment object.
+    /// This conversion should be done before sending segments into OAP.
     pub fn convert_segment_object(&self) -> skywalking::v3::SegmentObject {
         skywalking::v3::SegmentObject {
             trace_id: self.trace_id.to_string(),
             trace_segment_id: self.trace_segment_id.to_string(),
             spans: self.spans.convert_span_objects(),
-            service: String::from(self.service),
-            service_instance: String::from(self.service_instance),
+            service: self.service.clone(),
+            service_instance: self.service_instance.clone(),
             is_size_limited: false,
         }
     }
@@ -253,4 +264,12 @@ fn create_span() {
 
     assert_ne!(context.spans.last_span_mut().span_internal.end_time, 0);
     assert_eq!(context.spans.len(), 2);
+
+    let segment = context.convert_segment_object();
+    assert_eq!(segment.trace_id.len() != 0, true);
+    assert_eq!(segment.trace_segment_id.len() != 0, true);
+    assert_eq!(segment.spans.len() == 2, true);
+    assert_eq!(segment.service, "service");
+    assert_eq!(segment.service_instance, "instance");
+    assert_eq!(segment.is_size_limited, false);
 }
