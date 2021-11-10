@@ -14,4 +14,5 @@
 // limitations under the License.
 //
 
-mod reporter_trait;
+pub mod grpc;
+pub mod reporter_trait;

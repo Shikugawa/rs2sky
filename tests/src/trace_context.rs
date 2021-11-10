@@ -17,9 +17,9 @@
 #![allow(unused_imports)]
 
 pub mod skywalking_proto {
-  pub mod v3 {
-      tonic::include_proto!("skywalking.v3");
-  }
+    pub mod v3 {
+        tonic::include_proto!("skywalking.v3");
+    }
 }
 
 use prost::Message;

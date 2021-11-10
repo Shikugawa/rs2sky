@@ -14,7 +14,13 @@
 // limitations under the License.
 //
 
+use crate::skywalking_proto::v3::SegmentObject;
+use tokio::sync::mpsc;
+
 pub trait Reporter {
-  /// Send report
-  fn report() -> Result<(), &str>;
+    /// Send report
+    fn report(
+        &mut self,
+        ctx: SegmentObject,
+    ) -> Result<(), mpsc::error::TrySendError<SegmentObject>>;
 }

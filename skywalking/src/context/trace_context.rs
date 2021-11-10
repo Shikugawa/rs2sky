@@ -14,18 +14,15 @@
 // limitations under the License.
 //
 
-pub mod skywalking_proto {
-  pub mod v3 {
-      tonic::include_proto!("skywalking.v3");
-  }
-}
-
+use crate::common::random_generator::RandomGenerator;
 use crate::context::propagation::PropagationContext;
+use crate::skywalking_proto::v3::{
+    KeyStringValuePair, Log, SegmentObject, SegmentReference, SpanLayer, SpanObject, SpanType,
+};
 use std::time::{SystemTime, UNIX_EPOCH};
-use uuid::Uuid;
 
 pub struct Span {
-    pub span_internal: skywalking_proto::v3::SpanObject,
+    pub span_internal: SpanObject,
 }
 
 impl Span {
@@ -33,8 +30,8 @@ impl Span {
         parent_span_id: i32,
         operation_name: String,
         remote_peer: String,
-        span_type: skywalking_proto::v3::SpanType,
-        span_layer: skywalking_proto::v3::SpanLayer,
+        span_type: SpanType,
+        span_layer: SpanLayer,
         skip_analysis: bool,
     ) -> Self {
         let current_time = SystemTime::now()
@@ -42,12 +39,12 @@ impl Span {
             .unwrap()
             .as_secs();
 
-        let span_internal = skywalking_proto::v3::SpanObject {
+        let span_internal = SpanObject {
             span_id: parent_span_id + 1,
             parent_span_id: parent_span_id,
             start_time: current_time as i64,
             end_time: 0, // not set
-            refs: Vec::<skywalking_proto::v3::SegmentReference>::new(),
+            refs: Vec::<SegmentReference>::new(),
             operation_name: operation_name,
             peer: remote_peer,
             span_type: span_type as i32,
@@ -56,8 +53,8 @@ impl Span {
             // https://github.com/apache/skywalking/blob/6452e0c2d983c85c392602d50436e8d8e421fec9/oap-server/server-starter/src/main/resources/component-libraries.yml
             component_id: 11000,
             is_error: false,
-            tags: Vec::<skywalking_proto::v3::KeyStringValuePair>::new(),
-            logs: Vec::<skywalking_proto::v3::Log>::new(),
+            tags: Vec::<KeyStringValuePair>::new(),
+            logs: Vec::<Log>::new(),
             skip_analysis: skip_analysis,
         };
 
@@ -86,8 +83,8 @@ impl SpanSet {
         SpanSet { spans: Vec::new() }
     }
 
-    pub fn convert_span_objects(&self) -> Vec<skywalking_proto::v3::SpanObject> {
-        let mut objects = Vec::<skywalking_proto::v3::SpanObject>::new();
+    pub fn convert_span_objects(&self) -> Vec<SpanObject> {
+        let mut objects = Vec::<SpanObject>::new();
 
         for span in self.spans.iter() {
             objects.push(span.span_internal.clone());
@@ -121,12 +118,9 @@ impl TracingContext {
     /// Used to generate a new trace context. Typically called when no context has
     /// been propagated and a new trace is to be started.
     pub fn default(service_name: &'static str, instance_name: &'static str) -> Self {
-        let trace_id = Uuid::new_v4().as_u128();
-        let trace_segment_id = Uuid::new_v4().as_u128();
-
         TracingContext {
-            trace_id,
-            trace_segment_id,
+            trace_id: RandomGenerator::generate(),
+            trace_segment_id: RandomGenerator::generate(),
             service: String::from(service_name),
             service_instance: String::from(instance_name),
             spans: SpanSet::new(),
@@ -136,11 +130,9 @@ impl TracingContext {
     /// Generate a trace context using the propagated context.
     /// It is generally used when tracing is to be performed continuously.
     pub fn from_propagation_context(context: PropagationContext) -> Self {
-        let trace_segment_id = Uuid::new_v4().as_u128();
-
         TracingContext {
             trace_id: context.parent_trace_id.parse::<u128>().unwrap(),
-            trace_segment_id,
+            trace_segment_id: RandomGenerator::generate(),
             service: context.parent_service,
             service_instance: context.parent_service_instance,
             spans: SpanSet::new(),
@@ -160,8 +152,8 @@ impl TracingContext {
             parent_span_id as i32,
             operation_name,
             String::default(),
-            skywalking_proto::v3::SpanType::Entry,
-            skywalking_proto::v3::SpanLayer::Http,
+            SpanType::Entry,
+            SpanLayer::Http,
             false,
         ));
 
@@ -177,8 +169,8 @@ impl TracingContext {
             parent_span_id as i32,
             operation_name,
             remote_peer,
-            skywalking_proto::v3::SpanType::Exit,
-            skywalking_proto::v3::SpanLayer::Http,
+            SpanType::Exit,
+            SpanLayer::Http,
             false,
         ));
 
@@ -187,8 +179,8 @@ impl TracingContext {
 
     /// It converts tracing context into segment object.
     /// This conversion should be done before sending segments into OAP.
-    pub fn convert_segment_object(&self) -> skywalking_proto::v3::SegmentObject {
-        skywalking_proto::v3::SegmentObject {
+    pub fn convert_segment_object(&self) -> SegmentObject {
+        SegmentObject {
             trace_id: self.trace_id.to_string(),
             trace_segment_id: self.trace_segment_id.to_string(),
             spans: self.spans.convert_span_objects(),

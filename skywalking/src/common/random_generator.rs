@@ -14,12 +14,12 @@
 // limitations under the License.
 //
 
-pub mod skywalking_proto {
-    pub mod v3 {
-        tonic::include_proto!("skywalking.v3");
+use uuid::Uuid;
+
+pub struct RandomGenerator;
+
+impl RandomGenerator {
+    pub fn generate() -> u128 {
+        Uuid::new_v4().as_u128()
     }
 }
-
-pub mod common;
-pub mod context;
-pub mod reporter;
