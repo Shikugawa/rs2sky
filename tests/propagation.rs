@@ -15,7 +15,7 @@
 //
 
 #![allow(unused_imports)]
-use skywalking::context::propagation::*;
+use rs2sky::context::propagation::*;
 
 #[test]
 fn basic() {

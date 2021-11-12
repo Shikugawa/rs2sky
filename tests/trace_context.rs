@@ -24,8 +24,8 @@ pub mod skywalking_proto {
 
 use prost::Message;
 
-use skywalking::context::propagation::ContextDecoder;
-use skywalking::context::trace_context::TracingContext;
+use rs2sky::context::propagation::ContextDecoder;
+use rs2sky::context::trace_context::TracingContext;
 
 /// Serialize from A should equal Serialize from B
 #[allow(dead_code)]

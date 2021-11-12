@@ -14,5 +14,22 @@
 // limitations under the License.
 //
 
-pub mod propagation;
-pub mod trace_context;
+use crate::common::time::TimeFetcher;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+pub struct TimeFetcherImpl {}
+
+impl TimeFetcher for TimeFetcherImpl {
+    fn unix(&self) -> i64 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64
+    }
+}
+
+impl TimeFetcherImpl {
+    fn new() -> Self {
+        TimeFetcherImpl {}
+    }
+}
