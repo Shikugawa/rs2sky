@@ -15,12 +15,16 @@
 //
 
 use crate::common::time::TimeFetcher;
-use std::time::{SystemTime, UNIX_EPOCH};
+use lazy_static::lazy_static;
+use std::{
+    sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
-pub struct TimeFetcherImpl {}
+pub struct UnixTimeStampFetcher {}
 
-impl TimeFetcher for TimeFetcherImpl {
-    fn unix(&self) -> i64 {
+impl TimeFetcher for UnixTimeStampFetcher {
+    fn get(&self) -> i64 {
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -28,8 +32,8 @@ impl TimeFetcher for TimeFetcherImpl {
     }
 }
 
-impl TimeFetcherImpl {
-    fn new() -> Self {
-        TimeFetcherImpl {}
+impl UnixTimeStampFetcher {
+    pub fn new() -> Self {
+        UnixTimeStampFetcher {}
     }
 }

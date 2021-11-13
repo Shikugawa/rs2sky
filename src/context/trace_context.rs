@@ -17,20 +17,20 @@
 use crate::common::random_generator::RandomGenerator;
 use crate::common::time::TimeFetcher;
 use crate::context::propagation::PropagationContext;
-use crate::context::system_time::TimeFetcherImpl;
 use crate::skywalking_proto::v3::{
     KeyStringValuePair, Log, SegmentObject, SegmentReference, SpanLayer, SpanObject, SpanType,
 };
+use std::sync::Arc;
 
-pub struct Span<'b, T>
+pub struct Span<T>
 where
     T: TimeFetcher,
 {
     pub span_internal: SpanObject,
-    time_fetcher: &'b T,
+    time_fetcher: Arc<T>,
 }
 
-impl<'a, T: TimeFetcher> Span<'a, T> {
+impl<T: TimeFetcher> Span<T> {
     pub fn new(
         parent_span_id: i32,
         operation_name: String,
@@ -38,12 +38,12 @@ impl<'a, T: TimeFetcher> Span<'a, T> {
         span_type: SpanType,
         span_layer: SpanLayer,
         skip_analysis: bool,
-        time_fetcher: &'a T,
+        time_fetcher: Arc<T>,
     ) -> Self {
         let span_internal = SpanObject {
             span_id: parent_span_id + 1,
             parent_span_id: parent_span_id,
-            start_time: time_fetcher.unix(),
+            start_time: time_fetcher.get(),
             end_time: 0, // not set
             refs: Vec::<SegmentReference>::new(),
             operation_name: operation_name,
@@ -67,20 +67,20 @@ impl<'a, T: TimeFetcher> Span<'a, T> {
 
     // TODO(shikugawa): not to call `close()` explicitly.
     pub fn close(&mut self) {
-        self.span_internal.end_time = self.time_fetcher.unix();
+        self.span_internal.end_time = self.time_fetcher.get();
     }
 }
 
-pub struct SpanSet<'a, T>
+pub struct SpanSet<T>
 where
     T: TimeFetcher,
 {
-    spans: Vec<Span<'a, T>>,
-    time_fetcher: T,
+    spans: Vec<Span<T>>,
+    time_fetcher: Arc<T>,
 }
 
-impl<'a, T: TimeFetcher> SpanSet<'a, T> {
-    fn new(time_fetcher: T) -> Self {
+impl<T: TimeFetcher> SpanSet<T> {
+    fn new(time_fetcher: Arc<T>) -> Self {
         SpanSet {
             spans: Vec::new(),
             time_fetcher,
@@ -98,7 +98,7 @@ impl<'a, T: TimeFetcher> SpanSet<'a, T> {
     }
 
     pub fn new_span(
-        &'a mut self,
+        &mut self,
         parent_span_id: i32,
         operation_name: String,
         remote_peer: String,
@@ -113,7 +113,7 @@ impl<'a, T: TimeFetcher> SpanSet<'a, T> {
             span_type,
             span_layer,
             skip_analysis,
-            &self.time_fetcher,
+            self.time_fetcher.clone(),
         ));
     }
 
@@ -121,12 +121,12 @@ impl<'a, T: TimeFetcher> SpanSet<'a, T> {
         self.spans.len()
     }
 
-    pub fn last_span_mut(&mut self) -> &mut Span<'a, T> {
-        self.spans.last_mut().unwrap()
+    pub fn at(&mut self, index: usize) -> &mut Span<T> {
+        &mut self.spans[index]
     }
 }
 
-pub struct TracingContext<'a, T>
+pub struct TracingContext<T>
 where
     T: TimeFetcher,
 {
@@ -134,14 +134,14 @@ where
     pub trace_segment_id: u128,
     pub service: String,
     pub service_instance: String,
-    pub spans: SpanSet<'a, T>,
+    pub spans: SpanSet<T>,
 }
 
-impl<'a, T: TimeFetcher> TracingContext<'a, T> {
+impl<T: TimeFetcher> TracingContext<T> {
     /// Used to generate a new trace context. Typically called when no context has
     /// been propagated and a new trace is to be started.
     pub fn default(
-        time_fetcher: T,
+        time_fetcher: Arc<T>,
         service_name: &'static str,
         instance_name: &'static str,
     ) -> Self {
@@ -156,7 +156,7 @@ impl<'a, T: TimeFetcher> TracingContext<'a, T> {
 
     /// Generate a trace context using the propagated context.
     /// It is generally used when tracing is to be performed continuously.
-    pub fn from_propagation_context(time_fetcher: T, context: PropagationContext) -> Self {
+    pub fn from_propagation_context(time_fetcher: Arc<T>, context: PropagationContext) -> Self {
         TracingContext {
             trace_id: context.parent_trace_id.parse::<u128>().unwrap(),
             trace_segment_id: RandomGenerator::generate(),
@@ -169,39 +169,39 @@ impl<'a, T: TimeFetcher> TracingContext<'a, T> {
     /// Create a new entry span, which is an initiator of collection of spans.
     /// This should be called by invocation of the function which is triggered by
     /// external service.
-    pub fn create_entry_span(&'a mut self, operation_name: String) {
-        // if self.spans.len() > 0 {
-        //     return Err("failed to create entry span: the entry span has exist already");
-        // }
-
-        let parent_span_id = self.spans.len() as i32 - 1;
-        {
-            self.spans.new_span(
-                parent_span_id as i32,
-                operation_name,
-                String::default(),
-                SpanType::Entry,
-                SpanLayer::Http,
-                false,
-            );
+    pub fn create_entry_span(
+        &mut self,
+        operation_name: String,
+    ) -> Result<&mut Span<T>, &'static str> {
+        if self.spans.len() > 0 {
+            return Err("failed to create entry span: the entry span has exist already");
         }
-    }
 
-    pub fn peek_span(&mut self) -> Result<&'a mut Span<T>, &str> {
-        Ok(self.spans.last_span_mut())
-    }
+        let idx = self.spans.len();
+        let parent_span_id = self.spans.len() as i32 - 1;
 
-    fn test(&mut self) -> Result<&'a mut Span<T>, &str> {
-        self.create_entry_span(String::from("hoge"));
-        self.peek_span()
+        self.spans.new_span(
+            parent_span_id as i32,
+            operation_name,
+            String::default(),
+            SpanType::Entry,
+            SpanLayer::Http,
+            false,
+        );
+        Ok(self.spans.at(idx))
     }
-    
 
     /// Create a new exit span, which will be created when tracing context will generate
     /// new span for function invocation.
     /// Currently, this SDK supports RPC call. So we must set `remote_peer`.
-    pub fn create_exit_span(&'a mut self, operation_name: String, remote_peer: String) -> &mut Span<T> {
-        let parent_span_id = self.spans.len() - 1;
+    pub fn create_exit_span(
+        &mut self,
+        operation_name: String,
+        remote_peer: String,
+    ) -> &mut Span<T> {
+        let idx = self.spans.len();
+        let parent_span_id = self.spans.len() as i32 - 1;
+
         self.spans.new_span(
             parent_span_id as i32,
             operation_name,
@@ -211,7 +211,7 @@ impl<'a, T: TimeFetcher> TracingContext<'a, T> {
             false,
         );
 
-        self.spans.last_span_mut()
+        self.spans.at(idx)
     }
 
     /// It converts tracing context into segment object.

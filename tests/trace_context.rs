@@ -23,9 +23,10 @@ pub mod skywalking_proto {
 }
 
 use prost::Message;
-
+use rs2sky::common::time::TimeFetcher;
 use rs2sky::context::propagation::ContextDecoder;
 use rs2sky::context::trace_context::TracingContext;
+use std::sync::Arc;
 
 /// Serialize from A should equal Serialize from B
 #[allow(dead_code)]
@@ -41,15 +42,23 @@ where
     assert_eq!(buf_a, buf_b);
 }
 
+struct MockTimeFetcher {}
+
+impl TimeFetcher for MockTimeFetcher {
+    fn get(&self) -> i64 {
+        100
+    }
+}
+
 #[test]
 fn create_span() {
-    let mut context = TracingContext::default("service", "instance");
+    let time_fetcher = MockTimeFetcher {};
+    let mut context = TracingContext::default(Arc::new(time_fetcher), "service", "instance");
     assert_eq!(context.service, "service");
     assert_eq!(context.service_instance, "instance");
 
     {
-        let mut span1 = context.create_entry_span(String::from("op1")).unwrap();
-        span1.span_internal.start_time = 100;
+        let span1 = context.create_entry_span(String::from("op1")).unwrap();
         let span1_expected = skywalking_proto::v3::SpanObject {
             span_id: 0,
             parent_span_id: -1,
@@ -71,7 +80,7 @@ fn create_span() {
         span1.close();
     }
 
-    assert_ne!(context.spans.last_span_mut().span_internal.end_time, 0);
+    assert_ne!(context.spans.at(0).span_internal.end_time, 0);
     assert_eq!(context.spans.len(), 1);
 
     {
@@ -84,7 +93,6 @@ fn create_span() {
     {
         let mut span3 =
             context.create_exit_span(String::from("op3"), String::from("example.com/test"));
-        span3.span_internal.start_time = 100;
         let span3_expected = skywalking_proto::v3::SpanObject {
             span_id: 1,
             parent_span_id: 0,
@@ -106,7 +114,7 @@ fn create_span() {
         span3.close();
     }
 
-    assert_ne!(context.spans.last_span_mut().span_internal.end_time, 0);
+    assert_ne!(context.spans.at(1).span_internal.end_time, 0);
     assert_eq!(context.spans.len(), 2);
 
     let segment = context.convert_segment_object();
@@ -123,7 +131,8 @@ fn create_span_from_context() {
     let data = "1-MQ==-NQ==-3-bWVzaA==-aW5zdGFuY2U=-L2FwaS92MS9oZWFsdGg=-ZXhhbXBsZS5jb206ODA4MA==";
     let decoder = ContextDecoder::new(data);
     let prop = decoder.decode().unwrap();
-    let context = TracingContext::from_propagation_context(prop);
+    let time_fetcher = MockTimeFetcher {};
+    let context = TracingContext::from_propagation_context(Arc::new(time_fetcher), prop);
 
     let segment = context.convert_segment_object();
     assert_eq!(segment.trace_id.len() != 0, true);

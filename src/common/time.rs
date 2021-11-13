@@ -16,5 +16,5 @@
 
 pub trait TimeFetcher {
     // Get current UNIX timestamp with sec resolution.
-    fn unix(&self) -> i64;
+    fn get(&self) -> i64;
 }

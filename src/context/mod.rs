@@ -15,6 +15,5 @@
 //
 
 pub mod propagation;
+pub mod system_time;
 pub mod trace_context;
-
-mod system_time;
