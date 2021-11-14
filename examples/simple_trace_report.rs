@@ -14,13 +14,9 @@ async fn main() {
       Arc::new(time_fetcher), "service", "instance");
 
     {
-        let span_idx = context.create_entry_span(String::from("op1")).unwrap();
-
-    }
-    {
-      let mut span = context.spans.at(0);
+      let span = context.create_entry_span(String::from("op1")).unwrap();
       span.close();
     }
 
-    // flush(&mut reporter, context.convert_segment_object()).await.unwrap();
+    flush(&mut reporter, context.convert_segment_object()).await.unwrap();
 }

@@ -588,7 +588,6 @@ dependencies = [
  "async-stream",
  "base64",
  "bytes",
- "lazy_static",
  "prost",
  "prost-derive",
  "tokio",

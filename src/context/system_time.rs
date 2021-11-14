@@ -15,9 +15,7 @@
 //
 
 use crate::common::time::TimeFetcher;
-use lazy_static::lazy_static;
 use std::{
-    sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
 
