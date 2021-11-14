@@ -45,6 +45,7 @@ pub struct PropagationContext {
 }
 
 impl PropagationContext {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         do_sample: bool,
         parent_trace_id: String,
@@ -56,14 +57,14 @@ impl PropagationContext {
         destination_address: String,
     ) -> PropagationContext {
         PropagationContext {
-            do_sample: do_sample,
-            parent_trace_id: parent_trace_id,
-            parent_trace_segment_id: parent_trace_segment_id,
-            parent_span_id: parent_span_id,
-            parent_service: parent_service,
-            parent_service_instance: parent_service_instance,
-            destination_endpoint: destination_endpoint,
-            destination_address: destination_address,
+            do_sample,
+            parent_trace_id,
+            parent_trace_segment_id,
+            parent_span_id,
+            parent_service,
+            parent_service_instance,
+            destination_endpoint,
+            destination_address,
         }
     }
 }
@@ -74,10 +75,9 @@ pub struct ContextDecoder<'a> {
 
 impl<'a> ContextDecoder<'a> {
     pub fn new(header_value: &str) -> ContextDecoder<'_> {
-        let decoder = ContextDecoder {
-            header_value: header_value,
-        };
-        decoder
+        ContextDecoder {
+            header_value,
+        }
     }
 
     pub fn decode(&self) -> Result<PropagationContext, &str> {

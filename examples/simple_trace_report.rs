@@ -1,5 +1,5 @@
-use rs2sky::context::trace_context::TracingContext;
 use rs2sky::context::system_time::UnixTimeStampFetcher;
+use rs2sky::context::trace_context::TracingContext;
 use rs2sky::reporter::grpc::{flush, ReporterClient};
 use std::sync::Arc;
 use tokio;
@@ -10,13 +10,14 @@ async fn main() {
         .await
         .unwrap();
     let time_fetcher = UnixTimeStampFetcher::new();
-    let mut context = TracingContext::default(
-      Arc::new(time_fetcher), "service", "instance");
+    let mut context = TracingContext::default(Arc::new(time_fetcher), "service", "instance");
 
     {
-      let span = context.create_entry_span(String::from("op1")).unwrap();
-      span.close();
+        let span = context.create_entry_span(String::from("op1")).unwrap();
+        span.close();
     }
 
-    flush(&mut reporter, context.convert_segment_object()).await.unwrap();
+    flush(&mut reporter, context.convert_segment_object())
+        .await
+        .unwrap();
 }

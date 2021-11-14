@@ -42,11 +42,11 @@ impl<T: TimeFetcher> Span<T> {
     ) -> Self {
         let span_internal = SpanObject {
             span_id: parent_span_id + 1,
-            parent_span_id: parent_span_id,
+            parent_span_id,
             start_time: time_fetcher.get(),
             end_time: 0, // not set
             refs: Vec::<SegmentReference>::new(),
-            operation_name: operation_name,
+            operation_name,
             peer: remote_peer,
             span_type: span_type as i32,
             span_layer: span_layer as i32,
@@ -56,11 +56,11 @@ impl<T: TimeFetcher> Span<T> {
             is_error: false,
             tags: Vec::<KeyStringValuePair>::new(),
             logs: Vec::<Log>::new(),
-            skip_analysis: skip_analysis,
+            skip_analysis,
         };
 
         Span {
-            span_internal: span_internal,
+            span_internal,
             time_fetcher,
         }
     }
@@ -121,6 +121,10 @@ impl<T: TimeFetcher> SpanSet<T> {
         self.spans.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.spans.is_empty()
+    }
+
     pub fn at(&mut self, index: usize) -> &mut Span<T> {
         &mut self.spans[index]
     }
@@ -173,7 +177,7 @@ impl<T: TimeFetcher> TracingContext<T> {
         &mut self,
         operation_name: String,
     ) -> Result<&mut Span<T>, &'static str> {
-        if self.spans.len() > 0 {
+        if !self.spans.is_empty() {
             return Err("failed to create entry span: the entry span has exist already");
         }
 

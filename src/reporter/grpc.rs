@@ -16,7 +16,6 @@
 
 use crate::skywalking_proto::v3::trace_segment_report_service_client::TraceSegmentReportServiceClient;
 use crate::skywalking_proto::v3::SegmentObject;
-use async_stream;
 use tonic::transport::Channel;
 
 pub type ReporterClient = TraceSegmentReportServiceClient<Channel>;

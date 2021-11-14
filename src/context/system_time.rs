@@ -15,10 +15,9 @@
 //
 
 use crate::common::time::TimeFetcher;
-use std::{
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::time::{SystemTime, UNIX_EPOCH};
 
+#[derive(Default)]
 pub struct UnixTimeStampFetcher {}
 
 impl TimeFetcher for UnixTimeStampFetcher {
@@ -27,11 +26,5 @@ impl TimeFetcher for UnixTimeStampFetcher {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs() as i64
-    }
-}
-
-impl UnixTimeStampFetcher {
-    pub fn new() -> Self {
-        UnixTimeStampFetcher {}
     }
 }
