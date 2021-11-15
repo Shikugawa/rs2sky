@@ -17,12 +17,12 @@ async fn handle_ping(
     client: Client<HttpConnector>,
     tx: mpsc::Sender<TracingContext<UnixTimeStampFetcher>>,
 ) -> Result<Response<Body>, Infallible> {
-    let time_fetcher = UnixTimeStampFetcher::new();
-    let mut context = TracingContext::default(Arc::new(time_fetcher), "service", "instance");
+    let time_fetcher = UnixTimeStampFetcher::default();
+    let mut context = TracingContext::default(Arc::new(time_fetcher), "producer", "node_0");
 
     {
         let span = context.create_entry_span(String::from("op1")).unwrap();
-        let uri = "http://127.0.0.1:8082/pong".parse().unwrap();
+        let uri = "http://consumer:8082/pong".parse().unwrap();
         client.get(uri).await.unwrap();
         span.close();
     }
@@ -47,7 +47,6 @@ async fn producer_response(
 
 async fn run_producer_service(
     host: [u8; 4],
-    port: u16,
     tx: mpsc::Sender<TracingContext<UnixTimeStampFetcher>>,
 ) {
     let client = Client::new();
@@ -61,7 +60,7 @@ async fn run_producer_service(
             }))
         }
     });
-    let addr = SocketAddr::from((host, port));
+    let addr = SocketAddr::from((host, 8081));
     let server = Server::bind(&addr).serve(make_svc);
 
     if let Err(e) = server.await {
@@ -73,8 +72,8 @@ async fn handle_pong(
     _req: Request<Body>,
     tx: mpsc::Sender<TracingContext<UnixTimeStampFetcher>>,
 ) -> Result<Response<Body>, Infallible> {
-    let time_fetcher = UnixTimeStampFetcher::new();
-    let context = TracingContext::default(Arc::new(time_fetcher), "service", "consumer");
+    let time_fetcher = UnixTimeStampFetcher::default();
+    let context = TracingContext::default(Arc::new(time_fetcher), "consumer", "node_0");
     let _ = tx.send(context).await;
     Ok(Response::new(Body::from("hoge")))
 }
@@ -94,7 +93,6 @@ async fn consumer_response(
 
 async fn run_consumer_service(
     host: [u8; 4],
-    port: u16,
     tx: mpsc::Sender<TracingContext<UnixTimeStampFetcher>>,
 ) {
     let make_svc = make_service_fn(|_| {
@@ -102,7 +100,7 @@ async fn run_consumer_service(
 
         async { Ok::<_, Infallible>(service_fn(move |req| consumer_response(req, tx.to_owned()))) }
     });
-    let addr = SocketAddr::from((host, port));
+    let addr = SocketAddr::from((host, 8082));
     let server = Server::bind(&addr).serve(make_svc);
 
     if let Err(e) = server.await {
@@ -124,7 +122,7 @@ async fn main() {
         mpsc::Sender<TracingContext<UnixTimeStampFetcher>>,
         mpsc::Receiver<TracingContext<UnixTimeStampFetcher>>,
     ) = mpsc::channel(32);
-    let mut reporter = ReporterClient::connect("http://0.0.0.0:11800")
+    let mut reporter = ReporterClient::connect("http://collector:19876")
         .await
         .unwrap();
 
@@ -137,8 +135,8 @@ async fn main() {
     });
 
     if opt.mode == "consumer" {
-        run_consumer_service([127, 0, 0, 1], 8082, tx).await;
+        run_consumer_service([0, 0, 0, 0], tx).await;
     } else if opt.mode == "producer" {
-        run_producer_service([127, 0, 0, 1], 8081, tx).await;
+        run_producer_service([0, 0, 0, 0], tx).await;
     }
 }
