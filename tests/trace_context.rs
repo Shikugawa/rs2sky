@@ -58,12 +58,12 @@ fn create_span() {
     assert_eq!(context.service_instance, "instance");
 
     {
-        let span1 = context.create_entry_span(String::from("op1")).unwrap();
+        let mut span1 = context.create_entry_span(String::from("op1")).unwrap();
         let span1_expected = skywalking_proto::v3::SpanObject {
-            span_id: 0,
-            parent_span_id: -1,
+            span_id: 1,
+            parent_span_id: 0,
             start_time: 100,
-            end_time: 0, // not set
+            end_time: 100,
             refs: Vec::<skywalking_proto::v3::SegmentReference>::new(),
             operation_name: String::from("op1"),
             peer: String::default(),
@@ -75,29 +75,23 @@ fn create_span() {
             logs: Vec::<skywalking_proto::v3::Log>::new(),
             skip_analysis: false,
         };
-
+        context.finalize_span_for_test(&mut span1);
         check_serialize_equivalent(&span1.span_internal, &span1_expected);
-        span1.close();
     }
-
-    assert_ne!(context.spans.at(0).span_internal.end_time, 0);
-    assert_eq!(context.spans.len(), 1);
 
     {
         let span2 = context.create_entry_span(String::from("op2"));
         assert_eq!(span2.is_err(), true);
     }
 
-    assert_eq!(context.spans.len(), 1);
-
     {
         let mut span3 =
             context.create_exit_span(String::from("op3"), String::from("example.com/test"));
         let span3_expected = skywalking_proto::v3::SpanObject {
-            span_id: 1,
-            parent_span_id: 0,
+            span_id: 2,
+            parent_span_id: 1,
             start_time: 100,
-            end_time: 0, // not set
+            end_time: 100,
             refs: Vec::<skywalking_proto::v3::SegmentReference>::new(),
             operation_name: String::from("op3"),
             peer: String::from("example.com/test"),
@@ -109,18 +103,13 @@ fn create_span() {
             logs: Vec::<skywalking_proto::v3::Log>::new(),
             skip_analysis: false,
         };
-
+        context.finalize_span_for_test(&mut span3);
         check_serialize_equivalent(&span3.span_internal, &span3_expected);
-        span3.close();
     }
-
-    assert_ne!(context.spans.at(1).span_internal.end_time, 0);
-    assert_eq!(context.spans.len(), 2);
 
     let segment = context.convert_segment_object();
     assert_eq!(segment.trace_id.len() != 0, true);
     assert_eq!(segment.trace_segment_id.len() != 0, true);
-    assert_eq!(segment.spans.len() == 2, true);
     assert_eq!(segment.service, "service");
     assert_eq!(segment.service_instance, "instance");
     assert_eq!(segment.is_size_limited, false);

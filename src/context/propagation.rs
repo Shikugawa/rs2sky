@@ -75,9 +75,7 @@ pub struct ContextDecoder<'a> {
 
 impl<'a> ContextDecoder<'a> {
     pub fn new(header_value: &str) -> ContextDecoder<'_> {
-        ContextDecoder {
-            header_value,
-        }
+        ContextDecoder { header_value }
     }
 
     pub fn decode(&self) -> Result<PropagationContext, &str> {

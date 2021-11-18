@@ -71,65 +71,6 @@ impl<T: TimeFetcher> Span<T> {
     }
 }
 
-pub struct SpanSet<T>
-where
-    T: TimeFetcher,
-{
-    spans: Vec<Span<T>>,
-    time_fetcher: Arc<T>,
-}
-
-impl<T: TimeFetcher> SpanSet<T> {
-    fn new(time_fetcher: Arc<T>) -> Self {
-        SpanSet {
-            spans: Vec::new(),
-            time_fetcher,
-        }
-    }
-
-    pub fn convert_span_objects(&self) -> Vec<SpanObject> {
-        let mut objects = Vec::<SpanObject>::new();
-
-        for span in self.spans.iter() {
-            objects.push(span.span_internal.clone());
-        }
-
-        objects
-    }
-
-    pub fn new_span(
-        &mut self,
-        parent_span_id: i32,
-        operation_name: String,
-        remote_peer: String,
-        span_type: SpanType,
-        span_layer: SpanLayer,
-        skip_analysis: bool,
-    ) {
-        self.spans.push(Span::new(
-            parent_span_id,
-            operation_name,
-            remote_peer,
-            span_type,
-            span_layer,
-            skip_analysis,
-            self.time_fetcher.clone(),
-        ));
-    }
-
-    pub fn len(&self) -> usize {
-        self.spans.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.spans.is_empty()
-    }
-
-    pub fn at(&mut self, index: usize) -> &mut Span<T> {
-        &mut self.spans[index]
-    }
-}
-
 pub struct TracingContext<T>
 where
     T: TimeFetcher,
@@ -138,10 +79,15 @@ where
     pub trace_segment_id: u128,
     pub service: String,
     pub service_instance: String,
-    pub spans: SpanSet<T>,
+    next_span_id: i32,
+    time_fetcher: Arc<T>,
+    pub spans: Vec<Box<Span<T>>>,
 }
 
-impl<T: TimeFetcher> TracingContext<T> {
+impl<T> TracingContext<T>
+where
+    T: TimeFetcher,
+{
     /// Used to generate a new trace context. Typically called when no context has
     /// been propagated and a new trace is to be started.
     pub fn default(
@@ -154,7 +100,9 @@ impl<T: TimeFetcher> TracingContext<T> {
             trace_segment_id: RandomGenerator::generate(),
             service: String::from(service_name),
             service_instance: String::from(instance_name),
-            spans: SpanSet::new(time_fetcher),
+            next_span_id: 0,
+            time_fetcher,
+            spans: Vec::new(),
         }
     }
 
@@ -166,7 +114,9 @@ impl<T: TimeFetcher> TracingContext<T> {
             trace_segment_id: RandomGenerator::generate(),
             service: context.parent_service,
             service_instance: context.parent_service_instance,
-            spans: SpanSet::new(time_fetcher),
+            next_span_id: 0,
+            time_fetcher,
+            spans: Vec::new(),
         }
     }
 
@@ -176,23 +126,22 @@ impl<T: TimeFetcher> TracingContext<T> {
     pub fn create_entry_span(
         &mut self,
         operation_name: String,
-    ) -> Result<&mut Span<T>, &'static str> {
-        if !self.spans.is_empty() {
-            return Err("failed to create entry span: the entry span has exist already");
+    ) -> Result<Box<Span<T>>, &'static str> {
+        if self.next_span_id >= 1 {
+            return Err("entry span have already exist.");
         }
 
-        let idx = self.spans.len();
-        let parent_span_id = self.spans.len() as i32 - 1;
-
-        self.spans.new_span(
-            parent_span_id as i32,
+        let span = Box::new(Span::new(
+            self.next_span_id,
             operation_name,
             String::default(),
             SpanType::Entry,
             SpanLayer::Http,
             false,
-        );
-        Ok(self.spans.at(idx))
+            self.time_fetcher.clone(),
+        ));
+        self.next_span_id += 1;
+        Ok(span)
     }
 
     /// Create a new exit span, which will be created when tracing context will generate
@@ -202,29 +151,42 @@ impl<T: TimeFetcher> TracingContext<T> {
         &mut self,
         operation_name: String,
         remote_peer: String,
-    ) -> &mut Span<T> {
-        let idx = self.spans.len();
-        let parent_span_id = self.spans.len() as i32 - 1;
-
-        self.spans.new_span(
-            parent_span_id as i32,
+    ) -> Box<Span<T>> {
+        let span = Box::new(Span::new(
+            self.next_span_id,
             operation_name,
             remote_peer,
             SpanType::Exit,
             SpanLayer::Http,
             false,
-        );
+            self.time_fetcher.clone(),
+        ));
+        self.next_span_id += 1;
+        span
+    }
 
-        self.spans.at(idx)
+    pub fn finalize_span(&mut self, mut span: Box<Span<T>>) {
+        span.close();
+        self.spans.push(span);
+    }
+
+    pub fn finalize_span_for_test(&self, span: &mut Box<Span<T>>) {
+        span.close();
     }
 
     /// It converts tracing context into segment object.
     /// This conversion should be done before sending segments into OAP.
     pub fn convert_segment_object(&self) -> SegmentObject {
+        let mut objects = Vec::<SpanObject>::new();
+
+        for span in self.spans.iter() {
+            objects.push(span.span_internal.clone());
+        }
+
         SegmentObject {
             trace_id: self.trace_id.to_string(),
             trace_segment_id: self.trace_segment_id.to_string(),
-            spans: self.spans.convert_span_objects(),
+            spans: objects,
             service: self.service.clone(),
             service_instance: self.service_instance.clone(),
             is_size_limited: false,

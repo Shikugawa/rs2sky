@@ -18,15 +18,16 @@ async fn handle_ping(
     tx: mpsc::Sender<TracingContext<UnixTimeStampFetcher>>,
 ) -> Result<Response<Body>, Infallible> {
     let time_fetcher = UnixTimeStampFetcher::default();
-    let mut context = TracingContext::default(Arc::new(time_fetcher), "producer", "node_0");
-
+    let mut context = TracingContext::default(
+      Arc::new(time_fetcher), "producer", "node_0");
+    let span = context.create_entry_span(String::from("/ping")).unwrap();
     {
-        let span = context.create_entry_span(String::from("op1")).unwrap();
+        let span2 = context.create_exit_span(String::from("/pong"), String::from("consumer:8082"));
         let uri = "http://consumer:8082/pong".parse().unwrap();
         client.get(uri).await.unwrap();
-        span.close();
+        context.finalize_span(span2);
     }
-
+    context.finalize_span(span);
     let _ = tx.send(context).await;
     Ok(Response::new(Body::from("hoge")))
 }
@@ -73,7 +74,10 @@ async fn handle_pong(
     tx: mpsc::Sender<TracingContext<UnixTimeStampFetcher>>,
 ) -> Result<Response<Body>, Infallible> {
     let time_fetcher = UnixTimeStampFetcher::default();
-    let context = TracingContext::default(Arc::new(time_fetcher), "consumer", "node_0");
+    let mut context = TracingContext::default(
+      Arc::new(time_fetcher), "consumer", "node_0");
+    let span = context.create_entry_span(String::from("/ping")).unwrap();
+    context.finalize_span(span);
     let _ = tx.send(context).await;
     Ok(Response::new(Body::from("hoge")))
 }
