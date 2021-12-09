@@ -16,7 +16,7 @@
 
 use crate::common::random_generator::RandomGenerator;
 use crate::common::time::TimeFetcher;
-use crate::context::propagation::PropagationContext;
+use crate::context::propagation::context::PropagationContext;
 use crate::skywalking_proto::v3::{
     KeyStringValuePair, Log, SegmentObject, SegmentReference, SpanLayer, SpanObject, SpanType,
 };
@@ -79,9 +79,9 @@ where
     pub trace_segment_id: u128,
     pub service: String,
     pub service_instance: String,
-    next_span_id: i32,
-    time_fetcher: Arc<T>,
+    pub next_span_id: i32,
     pub spans: Vec<Box<Span<T>>>,
+    time_fetcher: Arc<T>,
 }
 
 impl<T> TracingContext<T>

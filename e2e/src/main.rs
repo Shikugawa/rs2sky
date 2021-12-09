@@ -1,6 +1,8 @@
 use hyper::client::HttpConnector;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Client, Method, Request, Response, Server, StatusCode};
+use rs2sky::context::propagation::encoder::encode_propagation;
+use rs2sky::context::propagation::decoder::decode_propagation;
 use rs2sky::context::system_time::UnixTimeStampFetcher;
 use rs2sky::context::trace_context::TracingContext;
 use rs2sky::reporter::grpc::{flush, ReporterClient};
@@ -18,17 +20,23 @@ async fn handle_ping(
     tx: mpsc::Sender<TracingContext<UnixTimeStampFetcher>>,
 ) -> Result<Response<Body>, Infallible> {
     let time_fetcher = UnixTimeStampFetcher::default();
-    let mut context = TracingContext::default(
-      Arc::new(time_fetcher), "producer", "node_0");
+    let mut context = TracingContext::default(Arc::new(time_fetcher), "producer", "node_0");
     let span = context.create_entry_span(String::from("/ping")).unwrap();
     {
         let span2 = context.create_exit_span(String::from("/pong"), String::from("consumer:8082"));
-        let uri = "http://consumer:8082/pong".parse().unwrap();
-        client.get(uri).await.unwrap();
+        let header = encode_propagation(&context, "/pong", "consumer:8082");
+        let req = Request::builder()
+            .method(Method::GET)
+            .header("sw8", header)
+            .uri("http://consumer:8082/pong")
+            .body(Body::from(""))
+            .unwrap();
+
+        client.request(req).await.unwrap();
         context.finalize_span(span2);
     }
     context.finalize_span(span);
-    let _ = tx.send(context).await;
+    let _ = tx.send(context).await;car
     Ok(Response::new(Body::from("hoge")))
 }
 
@@ -74,8 +82,8 @@ async fn handle_pong(
     tx: mpsc::Sender<TracingContext<UnixTimeStampFetcher>>,
 ) -> Result<Response<Body>, Infallible> {
     let time_fetcher = UnixTimeStampFetcher::default();
-    let mut context = TracingContext::default(
-      Arc::new(time_fetcher), "consumer", "node_0");
+    let ctx = decode_propagation(&_req.headers()["sw8"].to_str().unwrap()).unwrap();
+    let mut context = TracingContext::from_propagation_context(Arc::new(time_fetcher), ctx);
     let span = context.create_entry_span(String::from("/ping")).unwrap();
     context.finalize_span(span);
     let _ = tx.send(context).await;

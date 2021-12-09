@@ -15,13 +15,25 @@
 //
 
 #![allow(unused_imports)]
-use rs2sky::context::propagation::*;
+use rs2sky::common::time::TimeFetcher;
+use rs2sky::context::propagation::context::PropagationContext;
+use rs2sky::context::propagation::decoder::decode_propagation;
+use rs2sky::context::propagation::encoder::encode_propagation;
+use rs2sky::context::trace_context::TracingContext;
+use std::sync::Arc;
+
+struct MockTimeFetcher {}
+
+impl TimeFetcher for MockTimeFetcher {
+    fn get(&self) -> i64 {
+        100
+    }
+}
 
 #[test]
 fn basic() {
     let data = "1-MQ==-NQ==-3-bWVzaA==-aW5zdGFuY2U=-L2FwaS92MS9oZWFsdGg=-ZXhhbXBsZS5jb206ODA4MA==";
-    let decoder = ContextDecoder::new(data);
-    let res = decoder.decode().unwrap();
+    let res = decode_propagation(data).unwrap();
 
     assert_eq!(res.do_sample, true);
     assert_eq!(res.parent_trace_id, "1");
@@ -36,8 +48,7 @@ fn basic() {
 #[test]
 fn less_field() {
     let data = "1-MQ==-NQ==-3-bWVzaA==-aW5zdGFuY2U=-L2FwaS92MS9oZWFsdGg=";
-    let decoder = ContextDecoder::new(data);
-    let res = decoder.decode();
+    let res = decode_propagation(data);
 
     assert_eq!(res.is_err(), true);
 }
@@ -45,8 +56,7 @@ fn less_field() {
 #[test]
 fn more_field() {
     let data = "1-MQ==-NQ==-3-bWVzaA==-aW5zdGFuY2U=-L2FwaS92MS9oZWFsdGg=-ZXhhbXBsZS5jb206ODA4MA==-hogehoge";
-    let decoder = ContextDecoder::new(data);
-    let res = decoder.decode();
+    let res = decode_propagation(data);
 
     assert_eq!(res.is_err(), true);
 }
@@ -54,8 +64,18 @@ fn more_field() {
 #[test]
 fn invalid_sample() {
     let data = "3-MQ==-NQ==-3-bWVzaA==-aW5zdGFuY2U=-L2FwaS92MS9oZWFsdGg=-ZXhhbXBsZS5jb206ODA4MA==";
-    let decoder = ContextDecoder::new(data);
-    let res = decoder.decode();
+    let res = decode_propagation(data);
 
     assert_eq!(res.is_err(), true);
+}
+
+#[test]
+fn basic_encode() {
+    let time_fetcher = MockTimeFetcher {};
+    let tc = TracingContext::default(Arc::new(time_fetcher), "mesh", "instance");
+    let res = encode_propagation(&tc, "/api/v1/health", "example.com:8080");
+    let res2 = decode_propagation(&res).unwrap();
+    assert_eq!(true, res2.do_sample);
+    assert_eq!("/api/v1/health", res2.destination_endpoint);
+    assert_eq!("example.com:8080", res2.destination_address)
 }

@@ -24,7 +24,7 @@ pub mod skywalking_proto {
 
 use prost::Message;
 use rs2sky::common::time::TimeFetcher;
-use rs2sky::context::propagation::ContextDecoder;
+use rs2sky::context::propagation::decoder::decode_propagation;
 use rs2sky::context::trace_context::TracingContext;
 use std::sync::Arc;
 
@@ -118,8 +118,7 @@ fn create_span() {
 #[test]
 fn create_span_from_context() {
     let data = "1-MQ==-NQ==-3-bWVzaA==-aW5zdGFuY2U=-L2FwaS92MS9oZWFsdGg=-ZXhhbXBsZS5jb206ODA4MA==";
-    let decoder = ContextDecoder::new(data);
-    let prop = decoder.decode().unwrap();
+    let prop = decode_propagation(data).unwrap();
     let time_fetcher = MockTimeFetcher {};
     let context = TracingContext::from_propagation_context(Arc::new(time_fetcher), prop);
 
