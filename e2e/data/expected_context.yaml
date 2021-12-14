@@ -36,7 +36,7 @@ segmentItems:
       endTime: gt 0
       isError: false
       operationId: 0
-      operationName: /ping
+      operationName: /pong
       parentSpanId: 0
       peer: ''
       skipAnalysis: false

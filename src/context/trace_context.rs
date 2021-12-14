@@ -108,12 +108,17 @@ where
 
     /// Generate a trace context using the propagated context.
     /// It is generally used when tracing is to be performed continuously.
-    pub fn from_propagation_context(time_fetcher: Arc<T>, context: PropagationContext) -> Self {
+    pub fn from_propagation_context(
+        time_fetcher: Arc<T>,
+        service_name: &'static str,
+        instance_name: &'static str,
+        context: PropagationContext,
+    ) -> Self {
         TracingContext {
             trace_id: context.parent_trace_id.parse::<u128>().unwrap(),
             trace_segment_id: RandomGenerator::generate(),
-            service: context.parent_service,
-            service_instance: context.parent_service_instance,
+            service: String::from(service_name),
+            service_instance: String::from(instance_name),
             next_span_id: 0,
             time_fetcher,
             spans: Vec::new(),

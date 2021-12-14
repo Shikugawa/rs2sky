@@ -36,7 +36,7 @@ async fn handle_ping(
         context.finalize_span(span2);
     }
     context.finalize_span(span);
-    let _ = tx.send(context).await;car
+    let _ = tx.send(context).await;
     Ok(Response::new(Body::from("hoge")))
 }
 
@@ -83,8 +83,8 @@ async fn handle_pong(
 ) -> Result<Response<Body>, Infallible> {
     let time_fetcher = UnixTimeStampFetcher::default();
     let ctx = decode_propagation(&_req.headers()["sw8"].to_str().unwrap()).unwrap();
-    let mut context = TracingContext::from_propagation_context(Arc::new(time_fetcher), ctx);
-    let span = context.create_entry_span(String::from("/ping")).unwrap();
+    let mut context = TracingContext::from_propagation_context(Arc::new(time_fetcher), "consumer", "node_0" , ctx);
+    let span = context.create_entry_span(String::from("/pong")).unwrap();
     context.finalize_span(span);
     let _ = tx.send(context).await;
     Ok(Response::new(Body::from("hoge")))

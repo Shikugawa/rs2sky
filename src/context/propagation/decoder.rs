@@ -27,7 +27,7 @@ pub fn decode_propagation(header_value: &str) -> Result<PropagationContext, &str
     let do_sample = try_parse_sample_status(pieces[0])?;
     let parent_trace_id = b64_encoded_into_string(pieces[1])?;
     let parent_trace_segment_id = b64_encoded_into_string(pieces[2])?;
-    let parent_span_id: u32 = try_parse_parent_span_id(pieces[3])?;
+    let parent_span_id: i32 = try_parse_parent_span_id(pieces[3])?;
     let parent_service = b64_encoded_into_string(pieces[4])?;
     let parent_service_instance = b64_encoded_into_string(pieces[5])?;
     let destination_endpoint = b64_encoded_into_string(pieces[6])?;
@@ -47,9 +47,8 @@ pub fn decode_propagation(header_value: &str) -> Result<PropagationContext, &str
     Ok(context)
 }
 
-fn try_parse_parent_span_id(id: &str) -> Result<u32, &str> {
-    println!("{}", id);
-    if let Ok(result) = id.parse::<u32>() {
+fn try_parse_parent_span_id(id: &str) -> Result<i32, &str> {
+    if let Ok(result) = id.parse::<i32>() {
         Ok(result)
     } else {
         Err("failed to parse span id from parent.")

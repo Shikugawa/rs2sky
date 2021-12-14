@@ -27,7 +27,7 @@ pub struct PropagationContext {
     pub parent_trace_segment_id: String,
 
     /// It defines parent span's span ID.
-    pub parent_span_id: u32,
+    pub parent_span_id: i32,
 
     /// Service name of service parent belongs.
     pub parent_service: String,
@@ -48,7 +48,7 @@ impl PropagationContext {
         do_sample: bool,
         parent_trace_id: String,
         parent_trace_segment_id: String,
-        parent_span_id: u32,
+        parent_span_id: i32,
         parent_service: String,
         parent_service_instance: String,
         destination_endpoint: String,
