@@ -18,7 +18,8 @@ use crate::common::random_generator::RandomGenerator;
 use crate::common::time::TimeFetcher;
 use crate::context::propagation::context::PropagationContext;
 use crate::skywalking_proto::v3::{
-    KeyStringValuePair, Log, SegmentObject, SegmentReference, SpanLayer, SpanObject, SpanType,
+    KeyStringValuePair, Log, RefType, SegmentObject, SegmentReference, SpanLayer, SpanObject,
+    SpanType,
 };
 use std::sync::Arc;
 
@@ -63,6 +64,10 @@ impl<T: TimeFetcher> Span<T> {
             span_internal,
             time_fetcher,
         }
+    }
+
+    pub fn add_segment_reference(&mut self, segment_reference: SegmentReference) {
+        self.span_internal.refs.push(segment_reference);
     }
 
     // TODO(shikugawa): not to call `close()` explicitly.

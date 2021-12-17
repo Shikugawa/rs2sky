@@ -5,7 +5,7 @@ use rs2sky::context::propagation::encoder::encode_propagation;
 use rs2sky::context::propagation::decoder::decode_propagation;
 use rs2sky::context::system_time::UnixTimeStampFetcher;
 use rs2sky::context::trace_context::TracingContext;
-use rs2sky::reporter::grpc::{flush, ReporterClient};
+use rs2sky::reporter::grpc::Reporter;
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -130,21 +130,7 @@ struct Opt {
 #[tokio::main]
 async fn main() {
     let opt = Opt::from_args();
-    let (tx, mut rx): (
-        mpsc::Sender<TracingContext<UnixTimeStampFetcher>>,
-        mpsc::Receiver<TracingContext<UnixTimeStampFetcher>>,
-    ) = mpsc::channel(32);
-    let mut reporter = ReporterClient::connect("http://collector:19876")
-        .await
-        .unwrap();
-
-    tokio::spawn(async move {
-        while let Some(message) = rx.recv().await {
-            flush(&mut reporter, message.convert_segment_object())
-                .await
-                .unwrap();
-        }
-    });
+    let tx = Reporter::start("http://collector:19876".to_string()).await;
 
     if opt.mode == "consumer" {
         run_consumer_service([0, 0, 0, 0], tx).await;
