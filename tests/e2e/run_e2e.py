@@ -1,4 +1,3 @@
-import inspect
 import os
 import sys
 import time
@@ -9,7 +8,6 @@ import argparse
 import yaml
 import requests
 import time
-from requests import Response
 
 try:
   from yaml import CSafeLoader as Loader
