@@ -1,6 +1,6 @@
 # This is a basic workflow to help you get started with Actions
 
-name: cpp2sky test
+name: rs2sky test
 
 on:
   push:
@@ -33,4 +33,8 @@ jobs:
           pip3 install --upgrade pip
           pip3 install setuptools
           pip3 install -r requirements.txt
-          python3 tests/e2e/run_e2e.py --expected_file=tests/e2e/data/expected_context.yaml --max_retry_times=20 --target_path=/ping
+          timeout -s TERM 300 bash -c \
+          'while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' http://localhost:8081)" == "000" ]]; do sleep 5; done'
+          timeout -s TERM 300 bash -c \
+          'while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' http://localhost:12800)" == "000" ]]; do sleep 5; done'
+          python3 tests/e2e/run_e2e.py --expected_file=tests/e2e/data/expected_context.yaml --max_retry_times=3 --target_path=/ping
