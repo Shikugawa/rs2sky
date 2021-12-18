@@ -183,9 +183,9 @@ impl TracingContext {
             Ok(mut span) => {
                 process_fn(span.as_ref());
                 span.close();
-                return Ok(());
+                Ok(())
             }
-            Err(message) => return Err(message),
+            Err(message) => Err(message),
         }
     }
 
