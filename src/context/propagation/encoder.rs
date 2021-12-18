@@ -32,6 +32,6 @@ pub fn encode_propagation<T: TimeFetcher>(
     res += format!("{}-", encode(context.service.as_str())).as_str();
     res += format!("{}-", encode(context.service_instance.as_str())).as_str();
     res += format!("{}-", encode(endpoint)).as_str();
-    res += format!("{}", encode(address)).as_str();
+    res += &encode(address);
     res
 }

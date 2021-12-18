@@ -23,10 +23,7 @@ use tonic::transport::Channel;
 
 pub type ReporterClient = TraceSegmentReportServiceClient<Channel>;
 
-async fn flush(
-    client: &mut ReporterClient,
-    context: SegmentObject,
-) -> Result<(), tonic::Status> {
+async fn flush(client: &mut ReporterClient, context: SegmentObject) -> Result<(), tonic::Status> {
     let stream = async_stream::stream! {
         yield context;
     };

@@ -18,7 +18,7 @@ use crate::common::random_generator::RandomGenerator;
 use crate::common::time::TimeFetcher;
 use crate::context::propagation::context::PropagationContext;
 use crate::skywalking_proto::v3::{
-    KeyStringValuePair, Log, RefType, SegmentObject, SegmentReference, SpanLayer, SpanObject,
+    KeyStringValuePair, Log, SegmentObject, SegmentReference, SpanLayer, SpanObject,
     SpanType,
 };
 use std::sync::Arc;

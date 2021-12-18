@@ -3,7 +3,7 @@ services:
   collector:
     build:
       context: .
-      dockerfile: ./e2e/docker/Dockerfile.tool
+      dockerfile: ./tests/integration/docker/Dockerfile.tool
     ports:
       - 19876:19876
       - 12800:12800
@@ -11,7 +11,7 @@ services:
   consumer:
     build:
       context: .
-      dockerfile: ./e2e/docker/Dockerfile
+      dockerfile: ./tests/integration/docker/Dockerfile
     expose: 
       - 8082
     command: cargo run -- --mode consumer
@@ -21,7 +21,7 @@ services:
   producer:
     build:
       context: .
-      dockerfile: ./e2e/docker/Dockerfile
+      dockerfile: ./tests/integration/docker/Dockerfile
     ports:
       - 8081:8081
     command: cargo run -- --mode producer
