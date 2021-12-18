@@ -65,6 +65,36 @@ fn create_span() {
 
     {
         let mut span1 = context.create_entry_span(String::from("op1")).unwrap();
+        let mut logs = Vec::<(String, String)>::new();
+        logs.push((String::from("hoge"), String::from("fuga")));
+        logs.push((String::from("hoge2"), String::from("fuga2")));
+        let expected_log_message = logs
+            .to_owned()
+            .into_iter()
+            .map(|v| {
+                let (key, value) = v;
+                KeyStringValuePair { key, value }
+            })
+            .collect();
+        let mut expected_log = Vec::<Log>::new();
+        expected_log.push(Log {
+            time: 100,
+            data: expected_log_message,
+        });
+        span1.add_log(logs);
+
+        let mut tags = Vec::<(String, String)>::new();
+        tags.push((String::from("hoge"), String::from("fuga")));
+        let expected_tags = tags
+            .to_owned()
+            .into_iter()
+            .map(|v| {
+                let (key, value) = v;
+                KeyStringValuePair { key, value }
+            })
+            .collect();
+        span1.add_tag(tags[0].clone());
+
         let span1_expected = SpanObject {
             span_id: 1,
             parent_span_id: 0,
@@ -77,12 +107,12 @@ fn create_span() {
             span_layer: SpanLayer::Http as i32,
             component_id: 11000,
             is_error: false,
-            tags: Vec::<KeyStringValuePair>::new(),
-            logs: Vec::<Log>::new(),
+            tags: expected_tags,
+            logs: expected_log,
             skip_analysis: false,
         };
         context.finalize_span_for_test(&mut span1);
-        check_serialize_equivalent(&span1.span_internal, &span1_expected);
+        check_serialize_equivalent(span1.span_object(), &span1_expected);
     }
 
     {
@@ -111,7 +141,7 @@ fn create_span() {
             skip_analysis: false,
         };
         context.finalize_span_for_test(&mut span3);
-        check_serialize_equivalent(&span3.span_internal, &span3_expected);
+        check_serialize_equivalent(span3.span_object(), &span3_expected);
     }
 
     let segment = context.convert_segment_object();
@@ -161,9 +191,9 @@ fn crossprocess_test() {
     let mut span3 = context2.create_entry_span(String::from("op2")).unwrap();
     context2.finalize_span_for_test(&mut span3);
 
-    assert_eq!(span3.span_internal.span_id, 1);
-    assert_eq!(span3.span_internal.parent_span_id, 0);
-    assert_eq!(span3.span_internal.refs.len(), 1);
+    assert_eq!(span3.span_object().span_id, 1);
+    assert_eq!(span3.span_object().parent_span_id, 0);
+    assert_eq!(span3.span_object().refs.len(), 1);
 
     let expected_ref = SegmentReference {
         ref_type: RefType::CrossProcess as i32,
@@ -176,5 +206,5 @@ fn crossprocess_test() {
         network_address_used_at_peer: String::from("address"),
     };
 
-    check_serialize_equivalent(&expected_ref, &span3.span_internal.refs[0]);
+    check_serialize_equivalent(&expected_ref, &span3.span_object().refs[0]);
 }

@@ -14,7 +14,6 @@
 // limitations under the License.
 //
 
-use crate::context::system_time::UnixTimeStampFetcher;
 use crate::context::trace_context::TracingContext;
 use crate::skywalking_proto::v3::trace_segment_report_service_client::TraceSegmentReportServiceClient;
 use crate::skywalking_proto::v3::SegmentObject;
@@ -36,13 +35,10 @@ async fn flush(client: &mut ReporterClient, context: SegmentObject) -> Result<()
 pub struct Reporter {}
 
 impl Reporter {
-    pub async fn start(address: String) -> mpsc::Sender<TracingContext<UnixTimeStampFetcher>> {
-        let (tx, mut rx): (
-            mpsc::Sender<TracingContext<UnixTimeStampFetcher>>,
-            mpsc::Receiver<TracingContext<UnixTimeStampFetcher>>,
-        ) = mpsc::channel(32);
+    pub async fn start(address: String) -> mpsc::Sender<TracingContext> {
+        let (tx, mut rx): (mpsc::Sender<TracingContext>, mpsc::Receiver<TracingContext>) =
+            mpsc::channel(32);
         let mut reporter = ReporterClient::connect(address).await.unwrap();
-
         tokio::spawn(async move {
             while let Some(message) = rx.recv().await {
                 flush(&mut reporter, message.convert_segment_object())

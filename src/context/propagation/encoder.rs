@@ -14,15 +14,10 @@
 // limitations under the License.
 //
 
-use crate::common::time::TimeFetcher;
 use crate::context::trace_context::TracingContext;
 use base64::encode;
 
-pub fn encode_propagation<T: TimeFetcher>(
-    context: &TracingContext<T>,
-    endpoint: &str,
-    address: &str,
-) -> String {
+pub fn encode_propagation(context: &TracingContext, endpoint: &str, address: &str) -> String {
     let mut res = String::new();
 
     res += "1-";

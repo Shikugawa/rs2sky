@@ -23,15 +23,12 @@ use crate::skywalking_proto::v3::{
 };
 use std::sync::Arc;
 
-pub struct Span<T>
-where
-    T: TimeFetcher,
-{
-    pub span_internal: SpanObject,
-    time_fetcher: Arc<T>,
+pub struct Span {
+    span_internal: SpanObject,
+    time_fetcher: Arc<dyn TimeFetcher + Sync + Send>,
 }
 
-impl<T: TimeFetcher> Span<T> {
+impl Span {
     pub fn new(
         parent_span_id: i32,
         operation_name: String,
@@ -39,7 +36,7 @@ impl<T: TimeFetcher> Span<T> {
         span_type: SpanType,
         span_layer: SpanLayer,
         skip_analysis: bool,
-        time_fetcher: Arc<T>,
+        time_fetcher: Arc<dyn TimeFetcher + Sync + Send>,
     ) -> Self {
         let span_internal = SpanObject {
             span_id: parent_span_id + 1,
@@ -66,38 +63,57 @@ impl<T: TimeFetcher> Span<T> {
         }
     }
 
-    pub fn add_segment_reference(&mut self, segment_reference: SegmentReference) {
-        self.span_internal.refs.push(segment_reference);
-    }
-
     // TODO(shikugawa): not to call `close()` explicitly.
     pub fn close(&mut self) {
         self.span_internal.end_time = self.time_fetcher.get();
     }
+
+    pub fn span_object(&self) -> &SpanObject {
+        &self.span_internal
+    }
+
+    pub fn add_log(&mut self, message: Vec<(String, String)>) {
+        let log = Log {
+            time: self.time_fetcher.get(),
+            data: message
+                .into_iter()
+                .map(|v| {
+                    let (key, value) = v;
+                    KeyStringValuePair { key, value }
+                })
+                .collect(),
+        };
+        self.span_internal.logs.push(log);
+    }
+
+    pub fn add_tag(&mut self, tag: (String, String)) {
+        let (key, value) = tag;
+        self.span_internal
+            .tags
+            .push(KeyStringValuePair { key, value });
+    }
+
+    fn add_segment_reference(&mut self, segment_reference: SegmentReference) {
+        self.span_internal.refs.push(segment_reference);
+    }
 }
 
-pub struct TracingContext<T>
-where
-    T: TimeFetcher,
-{
+pub struct TracingContext {
     pub trace_id: String,
     pub trace_segment_id: String,
     pub service: String,
     pub service_instance: String,
     pub next_span_id: i32,
-    pub spans: Vec<Box<Span<T>>>,
-    time_fetcher: Arc<T>,
+    pub spans: Vec<Box<Span>>,
+    time_fetcher: Arc<dyn TimeFetcher + Sync + Send>,
     segment_link: Option<PropagationContext>,
 }
 
-impl<T> TracingContext<T>
-where
-    T: TimeFetcher,
-{
+impl TracingContext {
     /// Used to generate a new trace context. Typically called when no context has
     /// been propagated and a new trace is to be started.
     pub fn default(
-        time_fetcher: Arc<T>,
+        time_fetcher: Arc<dyn TimeFetcher + Sync + Send>,
         service_name: &'static str,
         instance_name: &'static str,
     ) -> Self {
@@ -115,7 +131,10 @@ where
 
     /// Generate a trace context using the propagated context.
     /// It is generally used when tracing is to be performed continuously.
-    pub fn from_propagation_context(time_fetcher: Arc<T>, context: PropagationContext) -> Self {
+    pub fn from_propagation_context(
+        time_fetcher: Arc<dyn TimeFetcher + Sync + Send>,
+        context: PropagationContext,
+    ) -> Self {
         let trace_id = context.parent_trace_id.clone();
         let parent_service = context.parent_service.clone();
         let parent_service_instance = context.parent_service_instance.clone();
@@ -135,10 +154,7 @@ where
     /// Create a new entry span, which is an initiator of collection of spans.
     /// This should be called by invocation of the function which is triggered by
     /// external service.
-    pub fn create_entry_span(
-        &mut self,
-        operation_name: String,
-    ) -> Result<Box<Span<T>>, &'static str> {
+    pub fn create_entry_span(&mut self, operation_name: String) -> Result<Box<Span>, &'static str> {
         if self.next_span_id >= 1 {
             return Err("entry span have already exist.");
         }
@@ -196,7 +212,7 @@ where
         &mut self,
         operation_name: String,
         remote_peer: String,
-    ) -> Result<Box<Span<T>>, &'static str> {
+    ) -> Result<Box<Span>, &'static str> {
         if self.next_span_id == 0 {
             return Err("entry span must be existed.");
         }
@@ -214,12 +230,12 @@ where
         Ok(span)
     }
 
-    pub fn finalize_span(&mut self, mut span: Box<Span<T>>) {
+    pub fn finalize_span(&mut self, mut span: Box<Span>) {
         span.close();
         self.spans.push(span);
     }
 
-    pub fn finalize_span_for_test(&self, span: &mut Box<Span<T>>) {
+    pub fn finalize_span_for_test(&self, span: &mut Box<Span>) {
         span.close();
     }
 
