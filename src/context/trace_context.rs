@@ -18,7 +18,7 @@ use crate::common::random_generator::RandomGenerator;
 use crate::common::time::TimeFetcher;
 use crate::context::propagation::context::PropagationContext;
 use crate::skywalking_proto::v3::{
-    KeyStringValuePair, Log, SegmentObject, SegmentReference, SpanLayer, SpanObject,
+    KeyStringValuePair, Log, RefType, SegmentObject, SegmentReference, SpanLayer, SpanObject,
     SpanType,
 };
 use std::sync::Arc;
@@ -80,13 +80,14 @@ pub struct TracingContext<T>
 where
     T: TimeFetcher,
 {
-    pub trace_id: u128,
-    pub trace_segment_id: u128,
+    pub trace_id: String,
+    pub trace_segment_id: String,
     pub service: String,
     pub service_instance: String,
     pub next_span_id: i32,
     pub spans: Vec<Box<Span<T>>>,
     time_fetcher: Arc<T>,
+    segment_link: Option<PropagationContext>,
 }
 
 impl<T> TracingContext<T>
@@ -108,25 +109,26 @@ where
             next_span_id: 0,
             time_fetcher,
             spans: Vec::new(),
+            segment_link: None,
         }
     }
 
     /// Generate a trace context using the propagated context.
     /// It is generally used when tracing is to be performed continuously.
-    pub fn from_propagation_context(
-        time_fetcher: Arc<T>,
-        service_name: &'static str,
-        instance_name: &'static str,
-        context: PropagationContext,
-    ) -> Self {
+    pub fn from_propagation_context(time_fetcher: Arc<T>, context: PropagationContext) -> Self {
+        let trace_id = context.parent_trace_id.clone();
+        let parent_service = context.parent_service.clone();
+        let parent_service_instance = context.parent_service_instance.clone();
+
         TracingContext {
-            trace_id: context.parent_trace_id.parse::<u128>().unwrap(),
+            trace_id: trace_id,
             trace_segment_id: RandomGenerator::generate(),
-            service: String::from(service_name),
-            service_instance: String::from(instance_name),
+            service: parent_service,
+            service_instance: parent_service_instance,
             next_span_id: 0,
             time_fetcher,
             spans: Vec::new(),
+            segment_link: Some(context),
         }
     }
 
@@ -141,7 +143,7 @@ where
             return Err("entry span have already exist.");
         }
 
-        let span = Box::new(Span::new(
+        let mut span = Box::new(Span::new(
             self.next_span_id,
             operation_name,
             String::default(),
@@ -150,6 +152,39 @@ where
             false,
             self.time_fetcher.clone(),
         ));
+
+        if self.segment_link.is_some() {
+            span.add_segment_reference(SegmentReference {
+                ref_type: RefType::CrossProcess as i32,
+                trace_id: self.trace_id.clone(),
+                parent_trace_segment_id: self
+                    .segment_link
+                    .as_ref()
+                    .unwrap()
+                    .parent_trace_segment_id
+                    .clone(),
+                parent_span_id: self.segment_link.as_ref().unwrap().parent_span_id,
+                parent_service: self.segment_link.as_ref().unwrap().parent_service.clone(),
+                parent_service_instance: self
+                    .segment_link
+                    .as_ref()
+                    .unwrap()
+                    .parent_service_instance
+                    .clone(),
+                parent_endpoint: self
+                    .segment_link
+                    .as_ref()
+                    .unwrap()
+                    .destination_endpoint
+                    .clone(),
+                network_address_used_at_peer: self
+                    .segment_link
+                    .as_ref()
+                    .unwrap()
+                    .destination_address
+                    .clone(),
+            });
+        }
         self.next_span_id += 1;
         Ok(span)
     }
@@ -161,7 +196,11 @@ where
         &mut self,
         operation_name: String,
         remote_peer: String,
-    ) -> Box<Span<T>> {
+    ) -> Result<Box<Span<T>>, &'static str> {
+        if self.next_span_id == 0 {
+            return Err("entry span must be existed.");
+        }
+
         let span = Box::new(Span::new(
             self.next_span_id,
             operation_name,
@@ -172,7 +211,7 @@ where
             self.time_fetcher.clone(),
         ));
         self.next_span_id += 1;
-        span
+        Ok(span)
     }
 
     pub fn finalize_span(&mut self, mut span: Box<Span<T>>) {

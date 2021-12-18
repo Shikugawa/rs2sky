@@ -19,7 +19,7 @@ use uuid::Uuid;
 pub struct RandomGenerator;
 
 impl RandomGenerator {
-    pub fn generate() -> u128 {
-        Uuid::new_v4().as_u128()
+    pub fn generate() -> String {
+        Uuid::new_v4().as_u128().to_string()
     }
 }

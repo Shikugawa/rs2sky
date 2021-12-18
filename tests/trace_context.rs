@@ -24,9 +24,15 @@ pub mod skywalking_proto {
 
 use prost::Message;
 use rs2sky::common::time::TimeFetcher;
+use rs2sky::context::propagation::context::PropagationContext;
 use rs2sky::context::propagation::decoder::decode_propagation;
+use rs2sky::context::propagation::encoder::encode_propagation;
 use rs2sky::context::trace_context::TracingContext;
-use std::sync::Arc;
+use skywalking_proto::v3::{
+    KeyStringValuePair, Log, RefType, SegmentObject, SegmentReference, SpanLayer, SpanObject,
+    SpanType,
+};
+use std::{cell::Ref, sync::Arc};
 
 /// Serialize from A should equal Serialize from B
 #[allow(dead_code)]
@@ -59,20 +65,20 @@ fn create_span() {
 
     {
         let mut span1 = context.create_entry_span(String::from("op1")).unwrap();
-        let span1_expected = skywalking_proto::v3::SpanObject {
+        let span1_expected = SpanObject {
             span_id: 1,
             parent_span_id: 0,
             start_time: 100,
             end_time: 100,
-            refs: Vec::<skywalking_proto::v3::SegmentReference>::new(),
+            refs: Vec::<SegmentReference>::new(),
             operation_name: String::from("op1"),
             peer: String::default(),
-            span_type: skywalking_proto::v3::SpanType::Entry as i32,
-            span_layer: skywalking_proto::v3::SpanLayer::Http as i32,
+            span_type: SpanType::Entry as i32,
+            span_layer: SpanLayer::Http as i32,
             component_id: 11000,
             is_error: false,
-            tags: Vec::<skywalking_proto::v3::KeyStringValuePair>::new(),
-            logs: Vec::<skywalking_proto::v3::Log>::new(),
+            tags: Vec::<KeyStringValuePair>::new(),
+            logs: Vec::<Log>::new(),
             skip_analysis: false,
         };
         context.finalize_span_for_test(&mut span1);
@@ -85,22 +91,23 @@ fn create_span() {
     }
 
     {
-        let mut span3 =
-            context.create_exit_span(String::from("op3"), String::from("example.com/test"));
-        let span3_expected = skywalking_proto::v3::SpanObject {
+        let mut span3 = context
+            .create_exit_span(String::from("op3"), String::from("example.com/test"))
+            .unwrap();
+        let span3_expected = SpanObject {
             span_id: 2,
             parent_span_id: 1,
             start_time: 100,
             end_time: 100,
-            refs: Vec::<skywalking_proto::v3::SegmentReference>::new(),
+            refs: Vec::<SegmentReference>::new(),
             operation_name: String::from("op3"),
             peer: String::from("example.com/test"),
-            span_type: skywalking_proto::v3::SpanType::Exit as i32,
-            span_layer: skywalking_proto::v3::SpanLayer::Http as i32,
+            span_type: SpanType::Exit as i32,
+            span_layer: SpanLayer::Http as i32,
             component_id: 11000,
             is_error: false,
-            tags: Vec::<skywalking_proto::v3::KeyStringValuePair>::new(),
-            logs: Vec::<skywalking_proto::v3::Log>::new(),
+            tags: Vec::<KeyStringValuePair>::new(),
+            logs: Vec::<Log>::new(),
             skip_analysis: false,
         };
         context.finalize_span_for_test(&mut span3);
@@ -128,4 +135,46 @@ fn create_span_from_context() {
     assert_eq!(segment.service, "mesh");
     assert_eq!(segment.service_instance, "instance");
     assert_eq!(segment.is_size_limited, false);
+}
+
+#[test]
+fn crossprocess_test() {
+    let time_fetcher1 = MockTimeFetcher {};
+    let mut context1 = TracingContext::default(Arc::new(time_fetcher1), "service", "instance");
+    assert_eq!(context1.service, "service");
+    assert_eq!(context1.service_instance, "instance");
+
+    let mut span1 = context1.create_entry_span(String::from("op1")).unwrap();
+    context1.finalize_span_for_test(&mut span1);
+
+    let mut span2 = context1
+        .create_exit_span(String::from("op2"), String::from("remote_peer"))
+        .unwrap();
+    context1.finalize_span_for_test(&mut span2);
+
+    let enc_prop = encode_propagation(&context1, "endpoint", "address");
+    let dec_prop = decode_propagation(&enc_prop).unwrap();
+
+    let time_fetcher2 = MockTimeFetcher {};
+    let mut context2 = TracingContext::from_propagation_context(Arc::new(time_fetcher2), dec_prop);
+
+    let mut span3 = context2.create_entry_span(String::from("op2")).unwrap();
+    context2.finalize_span_for_test(&mut span3);
+
+    assert_eq!(span3.span_internal.span_id, 1);
+    assert_eq!(span3.span_internal.parent_span_id, 0);
+    assert_eq!(span3.span_internal.refs.len(), 1);
+
+    let expected_ref = SegmentReference {
+        ref_type: RefType::CrossProcess as i32,
+        trace_id: context2.trace_id,
+        parent_trace_segment_id: context1.trace_segment_id,
+        parent_span_id: context1.next_span_id,
+        parent_service: context1.service,
+        parent_service_instance: context1.service_instance,
+        parent_endpoint: String::from("endpoint"),
+        network_address_used_at_peer: String::from("address"),
+    };
+
+    check_serialize_equivalent(&expected_ref, &span3.span_internal.refs[0]);
 }
