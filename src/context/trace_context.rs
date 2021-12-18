@@ -142,24 +142,31 @@ impl TracingContext {
 
     /// Generate a trace context using the propagated context.
     /// It is generally used when tracing is to be performed continuously.
-    pub fn from_propagation_context(context: PropagationContext) -> Self {
+    pub fn from_propagation_context(
+        service_name: &str,
+        instance_name: &str,
+        context: PropagationContext,
+    ) -> Self {
         let unix_time_fetcher = UnixTimeStampFetcher {};
-        TracingContext::from_propagation_context_internal(Arc::new(unix_time_fetcher), context)
+        TracingContext::from_propagation_context_internal(
+            Arc::new(unix_time_fetcher),
+            service_name,
+            instance_name,
+            context,
+        )
     }
 
     pub fn from_propagation_context_internal(
         time_fetcher: Arc<dyn TimeFetcher + Sync + Send>,
+        service_name: &str,
+        instance_name: &str,
         context: PropagationContext,
     ) -> Self {
-        let trace_id = context.parent_trace_id.clone();
-        let parent_service = context.parent_service.clone();
-        let parent_service_instance = context.parent_service_instance.clone();
-
         TracingContext {
-            trace_id: trace_id,
+            trace_id: context.parent_trace_id.clone(),
             trace_segment_id: RandomGenerator::generate(),
-            service: parent_service,
-            service_instance: parent_service_instance,
+            service: service_name.to_string(),
+            service_instance: instance_name.to_string(),
             next_span_id: 0,
             time_fetcher,
             spans: Vec::new(),

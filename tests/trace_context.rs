@@ -162,13 +162,18 @@ fn create_span_from_context() {
     let data = "1-MQ==-NQ==-3-bWVzaA==-aW5zdGFuY2U=-L2FwaS92MS9oZWFsdGg=-ZXhhbXBsZS5jb206ODA4MA==";
     let prop = decode_propagation(data).unwrap();
     let time_fetcher = MockTimeFetcher {};
-    let context = TracingContext::from_propagation_context_internal(Arc::new(time_fetcher), prop);
+    let context = TracingContext::from_propagation_context_internal(
+        Arc::new(time_fetcher),
+        "service2",
+        "instance2",
+        prop,
+    );
 
     let segment = context.convert_segment_object();
     assert_eq!(segment.trace_id.len() != 0, true);
     assert_eq!(segment.trace_segment_id.len() != 0, true);
-    assert_eq!(segment.service, "mesh");
-    assert_eq!(segment.service_instance, "instance");
+    assert_eq!(segment.service, "service2");
+    assert_eq!(segment.service_instance, "instance2");
     assert_eq!(segment.is_size_limited, false);
 }
 
@@ -190,8 +195,12 @@ fn crossprocess_test() {
     let dec_prop = decode_propagation(&enc_prop).unwrap();
 
     let time_fetcher2 = MockTimeFetcher {};
-    let mut context2 =
-        TracingContext::from_propagation_context_internal(Arc::new(time_fetcher2), dec_prop);
+    let mut context2 = TracingContext::from_propagation_context_internal(
+        Arc::new(time_fetcher2),
+        "service2",
+        "instance2",
+        dec_prop,
+    );
 
     let mut span3 = context2.create_entry_span("op2").unwrap();
     context2.finalize_span_for_test(&mut span3);

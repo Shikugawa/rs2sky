@@ -76,7 +76,7 @@ async fn handle_pong(
     tx: mpsc::Sender<TracingContext>,
 ) -> Result<Response<Body>, Infallible> {
     let ctx = decode_propagation(&_req.headers()["sw8"].to_str().unwrap()).unwrap();
-    let mut context = TracingContext::from_propagation_context(ctx);
+    let mut context = TracingContext::from_propagation_context("consumer", "node_0", ctx);
     let span = context.create_entry_span("/pong").unwrap();
     context.finalize_span(span);
     let _ = tx.send(context).await;

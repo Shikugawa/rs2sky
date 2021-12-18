@@ -39,6 +39,15 @@ segmentItems:
       operationName: /pong
       parentSpanId: 0
       peer: ''
+      refs:
+      - networkAddress: consumer:8082
+        parentEndpoint: /pong
+        parentService: producer
+        parentServiceInstance: node_0
+        parentSpanId: 2
+        parentTraceSegmentId: not null
+        refType: CrossProcess
+        traceId: not null
       skipAnalysis: false
       spanId: 1
       spanLayer: Http
