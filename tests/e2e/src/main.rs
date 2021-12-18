@@ -18,11 +18,9 @@ async fn handle_ping(
     tx: mpsc::Sender<TracingContext>,
 ) -> Result<Response<Body>, Infallible> {
     let mut context = TracingContext::default("producer", "node_0");
-    let span = context.create_entry_span(String::from("/ping")).unwrap();
+    let span = context.create_entry_span("/ping").unwrap();
     {
-        let span2 = context
-            .create_exit_span(String::from("/pong"), String::from("consumer:8082"))
-            .unwrap();
+        let span2 = context.create_exit_span("/pong", "consumer:8082").unwrap();
         let header = encode_propagation(&context, "/pong", "consumer:8082");
         let req = Request::builder()
             .method(Method::GET)
@@ -79,7 +77,7 @@ async fn handle_pong(
 ) -> Result<Response<Body>, Infallible> {
     let ctx = decode_propagation(&_req.headers()["sw8"].to_str().unwrap()).unwrap();
     let mut context = TracingContext::from_propagation_context(ctx);
-    let span = context.create_entry_span(String::from("/pong")).unwrap();
+    let span = context.create_entry_span("/pong").unwrap();
     context.finalize_span(span);
     let _ = tx.send(context).await;
     Ok(Response::new(Body::from("hoge")))

@@ -21,7 +21,6 @@ use crate::skywalking_proto::v3::{
     KeyStringValuePair, Log, RefType, SegmentObject, SegmentReference, SpanLayer, SpanObject,
     SpanType,
 };
-use std::os::unix::process;
 use std::sync::Arc;
 
 use super::system_time::UnixTimeStampFetcher;
@@ -75,25 +74,29 @@ impl Span {
         &self.span_internal
     }
 
-    pub fn add_log(&mut self, message: Vec<(String, String)>) {
+    pub fn add_log(&mut self, message: Vec<(&str, &str)>) {
         let log = Log {
             time: self.time_fetcher.get(),
             data: message
                 .into_iter()
                 .map(|v| {
                     let (key, value) = v;
-                    KeyStringValuePair { key, value }
+                    KeyStringValuePair {
+                        key: key.to_string(),
+                        value: value.to_string(),
+                    }
                 })
                 .collect(),
         };
         self.span_internal.logs.push(log);
     }
 
-    pub fn add_tag(&mut self, tag: (String, String)) {
+    pub fn add_tag(&mut self, tag: (&str, &str)) {
         let (key, value) = tag;
-        self.span_internal
-            .tags
-            .push(KeyStringValuePair { key, value });
+        self.span_internal.tags.push(KeyStringValuePair {
+            key: key.to_string(),
+            value: value.to_string(),
+        });
     }
 
     fn add_segment_reference(&mut self, segment_reference: SegmentReference) {
@@ -115,15 +118,15 @@ pub struct TracingContext {
 impl TracingContext {
     /// Used to generate a new trace context. Typically called when no context has
     /// been propagated and a new trace is to be started.
-    pub fn default(service_name: &'static str, instance_name: &'static str) -> Self {
+    pub fn default(service_name: &str, instance_name: &str) -> Self {
         let unix_time_fetcher = UnixTimeStampFetcher {};
         TracingContext::default_internal(Arc::new(unix_time_fetcher), service_name, instance_name)
     }
 
     pub fn default_internal(
         time_fetcher: Arc<dyn TimeFetcher + Sync + Send>,
-        service_name: &'static str,
-        instance_name: &'static str,
+        service_name: &str,
+        instance_name: &str,
     ) -> Self {
         TracingContext {
             trace_id: RandomGenerator::generate(),
@@ -164,27 +167,32 @@ impl TracingContext {
         }
     }
 
-    pub fn entry<F: FnMut(&Span)>(&mut self, operation_name: String, mut process_fn: F) {
+    pub fn entry<F: FnMut(&Span)>(
+        &mut self,
+        operation_name: &str,
+        mut process_fn: F,
+    ) -> Result<(), &str> {
         match self.create_entry_span(operation_name) {
             Ok(mut span) => {
                 process_fn(span.as_ref());
                 span.close();
+                return Ok(());
             }
-            Err(message) => unimplemented!(),
+            Err(message) => return Err(message),
         }
     }
 
     /// Create a new entry span, which is an initiator of collection of spans.
     /// This should be called by invocation of the function which is triggered by
     /// external service.
-    pub fn create_entry_span(&mut self, operation_name: String) -> Result<Box<Span>, &'static str> {
+    pub fn create_entry_span(&mut self, operation_name: &str) -> Result<Box<Span>, &'static str> {
         if self.next_span_id >= 1 {
             return Err("entry span have already exist.");
         }
 
         let mut span = Box::new(Span::new(
             self.next_span_id,
-            operation_name,
+            operation_name.to_string(),
             String::default(),
             SpanType::Entry,
             SpanLayer::Http,
@@ -230,16 +238,17 @@ impl TracingContext {
 
     pub fn exit<F: FnMut(&Span)>(
         &mut self,
-        operation_name: String,
-        remote_peer: String,
+        operation_name: &str,
+        remote_peer: &str,
         mut process_fn: F,
-    ) {
-        match self.create_entry_span(operation_name) {
+    ) -> Result<(), &str> {
+        match self.create_exit_span(operation_name, remote_peer) {
             Ok(mut span) => {
                 process_fn(span.as_ref());
                 span.close();
+                Ok(())
             }
-            Err(message) => unimplemented!(),
+            Err(message) => Err(message),
         }
     }
 
@@ -248,8 +257,8 @@ impl TracingContext {
     /// Currently, this SDK supports RPC call. So we must set `remote_peer`.
     pub fn create_exit_span(
         &mut self,
-        operation_name: String,
-        remote_peer: String,
+        operation_name: &str,
+        remote_peer: &str,
     ) -> Result<Box<Span>, &'static str> {
         if self.next_span_id == 0 {
             return Err("entry span must be existed.");
@@ -257,8 +266,8 @@ impl TracingContext {
 
         let span = Box::new(Span::new(
             self.next_span_id,
-            operation_name,
-            remote_peer,
+            operation_name.to_string(),
+            remote_peer.to_string(),
             SpanType::Exit,
             SpanLayer::Http,
             false,

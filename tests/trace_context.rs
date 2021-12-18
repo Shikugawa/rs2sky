@@ -59,21 +59,25 @@ impl TimeFetcher for MockTimeFetcher {
 #[test]
 fn create_span() {
     let time_fetcher = MockTimeFetcher {};
-    let mut context = TracingContext::default_internal(Arc::new(time_fetcher), "service", "instance");
+    let mut context =
+        TracingContext::default_internal(Arc::new(time_fetcher), "service", "instance");
     assert_eq!(context.service, "service");
     assert_eq!(context.service_instance, "instance");
 
     {
-        let mut span1 = context.create_entry_span(String::from("op1")).unwrap();
-        let mut logs = Vec::<(String, String)>::new();
-        logs.push((String::from("hoge"), String::from("fuga")));
-        logs.push((String::from("hoge2"), String::from("fuga2")));
+        let mut span1 = context.create_entry_span("op1").unwrap();
+        let mut logs = Vec::<(&str, &str)>::new();
+        logs.push(("hoge", "fuga"));
+        logs.push(("hoge2", "fuga2"));
         let expected_log_message = logs
             .to_owned()
             .into_iter()
             .map(|v| {
                 let (key, value) = v;
-                KeyStringValuePair { key, value }
+                KeyStringValuePair {
+                    key: key.to_string(),
+                    value: value.to_string(),
+                }
             })
             .collect();
         let mut expected_log = Vec::<Log>::new();
@@ -83,14 +87,17 @@ fn create_span() {
         });
         span1.add_log(logs);
 
-        let mut tags = Vec::<(String, String)>::new();
-        tags.push((String::from("hoge"), String::from("fuga")));
+        let mut tags = Vec::<(&str, &str)>::new();
+        tags.push(("hoge", "fuga"));
         let expected_tags = tags
             .to_owned()
             .into_iter()
             .map(|v| {
                 let (key, value) = v;
-                KeyStringValuePair { key, value }
+                KeyStringValuePair {
+                    key: key.to_string(),
+                    value: value.to_string(),
+                }
             })
             .collect();
         span1.add_tag(tags[0].clone());
@@ -101,7 +108,7 @@ fn create_span() {
             start_time: 100,
             end_time: 100,
             refs: Vec::<SegmentReference>::new(),
-            operation_name: String::from("op1"),
+            operation_name: "op1".to_string(),
             peer: String::default(),
             span_type: SpanType::Entry as i32,
             span_layer: SpanLayer::Http as i32,
@@ -116,22 +123,20 @@ fn create_span() {
     }
 
     {
-        let span2 = context.create_entry_span(String::from("op2"));
+        let span2 = context.create_entry_span("op2");
         assert_eq!(span2.is_err(), true);
     }
 
     {
-        let mut span3 = context
-            .create_exit_span(String::from("op3"), String::from("example.com/test"))
-            .unwrap();
+        let mut span3 = context.create_exit_span("op3", "example.com/test").unwrap();
         let span3_expected = SpanObject {
             span_id: 2,
             parent_span_id: 1,
             start_time: 100,
             end_time: 100,
             refs: Vec::<SegmentReference>::new(),
-            operation_name: String::from("op3"),
-            peer: String::from("example.com/test"),
+            operation_name: "op3".to_string(),
+            peer: "example.com/test".to_string(),
             span_type: SpanType::Exit as i32,
             span_layer: SpanLayer::Http as i32,
             component_id: 11000,
@@ -170,25 +175,25 @@ fn create_span_from_context() {
 #[test]
 fn crossprocess_test() {
     let time_fetcher1 = MockTimeFetcher {};
-    let mut context1 = TracingContext::default_internal(Arc::new(time_fetcher1), "service", "instance");
+    let mut context1 =
+        TracingContext::default_internal(Arc::new(time_fetcher1), "service", "instance");
     assert_eq!(context1.service, "service");
     assert_eq!(context1.service_instance, "instance");
 
-    let mut span1 = context1.create_entry_span(String::from("op1")).unwrap();
+    let mut span1 = context1.create_entry_span("op1").unwrap();
     context1.finalize_span_for_test(&mut span1);
 
-    let mut span2 = context1
-        .create_exit_span(String::from("op2"), String::from("remote_peer"))
-        .unwrap();
+    let mut span2 = context1.create_exit_span("op2", "remote_peer").unwrap();
     context1.finalize_span_for_test(&mut span2);
 
     let enc_prop = encode_propagation(&context1, "endpoint", "address");
     let dec_prop = decode_propagation(&enc_prop).unwrap();
 
     let time_fetcher2 = MockTimeFetcher {};
-    let mut context2 = TracingContext::from_propagation_context_internal(Arc::new(time_fetcher2), dec_prop);
+    let mut context2 =
+        TracingContext::from_propagation_context_internal(Arc::new(time_fetcher2), dec_prop);
 
-    let mut span3 = context2.create_entry_span(String::from("op2")).unwrap();
+    let mut span3 = context2.create_entry_span("op2").unwrap();
     context2.finalize_span_for_test(&mut span3);
 
     assert_eq!(span3.span_object().span_id, 1);
@@ -202,8 +207,8 @@ fn crossprocess_test() {
         parent_span_id: context1.next_span_id,
         parent_service: context1.service,
         parent_service_instance: context1.service_instance,
-        parent_endpoint: String::from("endpoint"),
-        network_address_used_at_peer: String::from("address"),
+        parent_endpoint: "endpoint".to_string(),
+        network_address_used_at_peer: "address".to_string(),
     };
 
     check_serialize_equivalent(&expected_ref, &span3.span_object().refs[0]);
