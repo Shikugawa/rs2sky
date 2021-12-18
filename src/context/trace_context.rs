@@ -21,7 +21,10 @@ use crate::skywalking_proto::v3::{
     KeyStringValuePair, Log, RefType, SegmentObject, SegmentReference, SpanLayer, SpanObject,
     SpanType,
 };
+use std::os::unix::process;
 use std::sync::Arc;
+
+use super::system_time::UnixTimeStampFetcher;
 
 pub struct Span {
     span_internal: SpanObject,
@@ -112,7 +115,12 @@ pub struct TracingContext {
 impl TracingContext {
     /// Used to generate a new trace context. Typically called when no context has
     /// been propagated and a new trace is to be started.
-    pub fn default(
+    pub fn default(service_name: &'static str, instance_name: &'static str) -> Self {
+        let unix_time_fetcher = UnixTimeStampFetcher {};
+        TracingContext::default_internal(Arc::new(unix_time_fetcher), service_name, instance_name)
+    }
+
+    pub fn default_internal(
         time_fetcher: Arc<dyn TimeFetcher + Sync + Send>,
         service_name: &'static str,
         instance_name: &'static str,
@@ -131,7 +139,12 @@ impl TracingContext {
 
     /// Generate a trace context using the propagated context.
     /// It is generally used when tracing is to be performed continuously.
-    pub fn from_propagation_context(
+    pub fn from_propagation_context(context: PropagationContext) -> Self {
+        let unix_time_fetcher = UnixTimeStampFetcher {};
+        TracingContext::from_propagation_context_internal(Arc::new(unix_time_fetcher), context)
+    }
+
+    pub fn from_propagation_context_internal(
         time_fetcher: Arc<dyn TimeFetcher + Sync + Send>,
         context: PropagationContext,
     ) -> Self {
@@ -148,6 +161,16 @@ impl TracingContext {
             time_fetcher,
             spans: Vec::new(),
             segment_link: Some(context),
+        }
+    }
+
+    pub fn entry<F: FnMut(&Span)>(&mut self, operation_name: String, mut process_fn: F) {
+        match self.create_entry_span(operation_name) {
+            Ok(mut span) => {
+                process_fn(span.as_ref());
+                span.close();
+            }
+            Err(message) => unimplemented!(),
         }
     }
 
@@ -203,6 +226,21 @@ impl TracingContext {
         }
         self.next_span_id += 1;
         Ok(span)
+    }
+
+    pub fn exit<F: FnMut(&Span)>(
+        &mut self,
+        operation_name: String,
+        remote_peer: String,
+        mut process_fn: F,
+    ) {
+        match self.create_entry_span(operation_name) {
+            Ok(mut span) => {
+                process_fn(span.as_ref());
+                span.close();
+            }
+            Err(message) => unimplemented!(),
+        }
     }
 
     /// Create a new exit span, which will be created when tracing context will generate

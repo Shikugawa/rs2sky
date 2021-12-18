@@ -72,7 +72,7 @@ fn invalid_sample() {
 #[test]
 fn basic_encode() {
     let time_fetcher = MockTimeFetcher {};
-    let tc = TracingContext::default(Arc::new(time_fetcher), "mesh", "instance");
+    let tc = TracingContext::default_internal(Arc::new(time_fetcher), "mesh", "instance");
     let res = encode_propagation(&tc, "/api/v1/health", "example.com:8080");
     let res2 = decode_propagation(&res).unwrap();
     assert_eq!(true, res2.do_sample);
